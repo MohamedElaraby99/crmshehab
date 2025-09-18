@@ -42,6 +42,19 @@ export interface Product {
   updatedAt: string;
 }
 
+export interface ProductPurchase {
+  id: string;
+  productId: string;
+  vendorId: string;
+  vendorName: string;
+  quantity: number;
+  price: number;
+  totalAmount: number;
+  purchaseDate: string;
+  orderId?: string;
+  notes?: string;
+}
+
 export interface Vendor {
   id: string;
   name: string;
@@ -52,6 +65,9 @@ export interface Vendor {
   city: string;
   country: string;
   status: 'active' | 'inactive';
+  username: string;
+  password: string;
+  userId?: string; // Link to User table
   createdAt: string;
   updatedAt: string;
 }

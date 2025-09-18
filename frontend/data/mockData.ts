@@ -1,10 +1,15 @@
 
-import { User, Supplier, Order, Product, Vendor } from '../types';
+import { User, Supplier, Order, Product, Vendor, ProductPurchase } from '../types';
 
 export const MOCK_USERS: User[] = [
   { id: 'u1', username: 'admin', isSupplier: false },
   { id: 'u2', username: 'supplierA', isSupplier: true, supplierId: 's1' },
   { id: 'u3', username: 'supplierB', isSupplier: true, supplierId: 's2' },
+  // Vendor users
+  { id: 'u4', username: 'autoparts_central', isSupplier: false },
+  { id: 'u5', username: 'global_motors', isSupplier: false },
+  { id: 'u6', username: 'european_auto', isSupplier: false },
+  { id: 'u7', username: 'asian_parts', isSupplier: false },
 ];
 
 export const MOCK_SUPPLIERS: Supplier[] = [
@@ -23,6 +28,9 @@ export const MOCK_VENDORS: Vendor[] = [
     city: 'Detroit',
     country: 'USA',
     status: 'active',
+    username: 'autoparts_central',
+    password: 'AutoParts2024!',
+    userId: 'u4',
     createdAt: '2023-01-15',
     updatedAt: '2024-01-10'
   },
@@ -36,6 +44,9 @@ export const MOCK_VENDORS: Vendor[] = [
     city: 'Chicago',
     country: 'USA',
     status: 'active',
+    username: 'global_motors',
+    password: 'GlobalMotors2024!',
+    userId: 'u5',
     createdAt: '2023-02-20',
     updatedAt: '2024-01-05'
   },
@@ -49,6 +60,9 @@ export const MOCK_VENDORS: Vendor[] = [
     city: 'London',
     country: 'UK',
     status: 'inactive',
+    username: 'european_auto',
+    password: 'EuropeanAuto2024!',
+    userId: 'u6',
     createdAt: '2023-03-10',
     updatedAt: '2023-12-15'
   },
@@ -62,6 +76,9 @@ export const MOCK_VENDORS: Vendor[] = [
     city: 'Shanghai',
     country: 'China',
     status: 'active',
+    username: 'asian_parts',
+    password: 'AsianParts2024!',
+    userId: 'u7',
     createdAt: '2023-04-05',
     updatedAt: '2024-01-08'
   }
@@ -187,6 +204,200 @@ export const MOCK_PRODUCTS: Product[] = [
     supplierId: 's2',
     createdAt: '2023-04-10',
     updatedAt: '2024-01-08'
+  }
+];
+
+export const MOCK_PRODUCT_PURCHASES: ProductPurchase[] = [
+  // Gear Assembly purchases
+  {
+    id: 'pp1',
+    productId: 'p1',
+    vendorId: 'v1',
+    vendorName: 'Auto Parts Central',
+    quantity: 100,
+    price: 16.00,
+    totalAmount: 1600.00,
+    purchaseDate: '2023-12-20',
+    orderId: 'o1',
+    notes: 'Initial bulk order'
+  },
+  {
+    id: 'pp2',
+    productId: 'p1',
+    vendorId: 'v2',
+    vendorName: 'Global Motors Ltd',
+    quantity: 50,
+    price: 15.50,
+    totalAmount: 775.00,
+    purchaseDate: '2023-11-01',
+    orderId: 'o11',
+    notes: 'Follow-up order with discount'
+  },
+  // Brake Pad Set purchases
+  {
+    id: 'pp3',
+    productId: 'p2',
+    vendorId: 'v1',
+    vendorName: 'Auto Parts Central',
+    quantity: 200,
+    price: 12.00,
+    totalAmount: 2400.00,
+    purchaseDate: '2023-12-20',
+    orderId: 'o2',
+    notes: 'Standard order'
+  },
+  {
+    id: 'pp4',
+    productId: 'p2',
+    vendorId: 'v2',
+    vendorName: 'Global Motors Ltd',
+    quantity: 150,
+    price: 11.50,
+    totalAmount: 1725.00,
+    purchaseDate: '2023-10-15',
+    orderId: 'o12',
+    notes: 'Previous order with better pricing'
+  },
+  // Oil Filter purchases
+  {
+    id: 'pp5',
+    productId: 'p3',
+    vendorId: 'v2',
+    vendorName: 'Global Motors Ltd',
+    quantity: 300,
+    price: 13.00,
+    totalAmount: 3900.00,
+    purchaseDate: '2023-12-20',
+    orderId: 'o3',
+    notes: 'High volume order'
+  },
+  // Control Arm purchases
+  {
+    id: 'pp6',
+    productId: 'p4',
+    vendorId: 'v2',
+    vendorName: 'Global Motors Ltd',
+    quantity: 400,
+    price: 2.50,
+    totalAmount: 1000.00,
+    purchaseDate: '2023-12-20',
+    orderId: 'o4',
+    notes: 'Bulk order for suspension parts'
+  },
+  // Wheel Hub (Iron) purchases
+  {
+    id: 'pp7',
+    productId: 'p5',
+    vendorId: 'v1',
+    vendorName: 'Auto Parts Central',
+    quantity: 100,
+    price: 50.00,
+    totalAmount: 5000.00,
+    purchaseDate: '2023-12-14',
+    orderId: 'o6',
+    notes: 'Urgent order for commercial vehicles'
+  },
+  // Wheel Hub (Aluminum) purchases
+  {
+    id: 'pp8',
+    productId: 'p6',
+    vendorId: 'v1',
+    vendorName: 'Auto Parts Central',
+    quantity: 100,
+    price: 70.00,
+    totalAmount: 7000.00,
+    purchaseDate: '2023-12-14',
+    orderId: 'o7',
+    notes: 'Performance vehicle parts'
+  },
+  // Radiator purchases
+  {
+    id: 'pp9',
+    productId: 'p7',
+    vendorId: 'v2',
+    vendorName: 'Global Motors Ltd',
+    quantity: 200,
+    price: 20.00,
+    totalAmount: 4000.00,
+    purchaseDate: '2023-11-08',
+    orderId: 'o10',
+    notes: 'Holiday shipping arrangement'
+  },
+  // Shock Absorber (Iron) purchases
+  {
+    id: 'pp10',
+    productId: 'p8',
+    vendorId: 'v1',
+    vendorName: 'Auto Parts Central',
+    quantity: 100,
+    price: 50.00,
+    totalAmount: 5000.00,
+    purchaseDate: '2023-12-14',
+    orderId: 'o8',
+    notes: 'Heavy vehicle suspension'
+  },
+  // Shock Absorber (Aluminum) purchases
+  {
+    id: 'pp11',
+    productId: 'p9',
+    vendorId: 'v1',
+    vendorName: 'Auto Parts Central',
+    quantity: 100,
+    price: 70.00,
+    totalAmount: 7000.00,
+    purchaseDate: '2023-12-14',
+    orderId: 'o9',
+    notes: 'Sports car suspension'
+  },
+  // Tie Rod End purchases
+  {
+    id: 'pp12',
+    productId: 'p10',
+    vendorId: 'v2',
+    vendorName: 'Global Motors Ltd',
+    quantity: 400,
+    price: 2.50,
+    totalAmount: 1000.00,
+    purchaseDate: '2023-12-20',
+    orderId: 'o5',
+    notes: 'Steering system components'
+  },
+  // Additional purchases from different vendors for same products
+  {
+    id: 'pp13',
+    productId: 'p1',
+    vendorId: 'v3',
+    vendorName: 'European Auto Supply',
+    quantity: 75,
+    price: 17.50,
+    totalAmount: 1312.50,
+    purchaseDate: '2023-09-15',
+    orderId: 'o13',
+    notes: 'European supplier - higher quality'
+  },
+  {
+    id: 'pp14',
+    productId: 'p2',
+    vendorId: 'v4',
+    vendorName: 'Asian Parts Co',
+    quantity: 300,
+    price: 10.00,
+    totalAmount: 3000.00,
+    purchaseDate: '2023-08-20',
+    orderId: 'o14',
+    notes: 'Asian supplier - competitive pricing'
+  },
+  {
+    id: 'pp15',
+    productId: 'p5',
+    vendorId: 'v2',
+    vendorName: 'Global Motors Ltd',
+    quantity: 50,
+    price: 48.00,
+    totalAmount: 2400.00,
+    purchaseDate: '2023-07-10',
+    orderId: 'o15',
+    notes: 'Alternative supplier for wheel hubs'
   }
 ];
 
