@@ -1,0 +1,5 @@
+{
+  "name": "Supplier Order Management",
+  "description": "A web application for managing orders with suppliers. Each supplier has a separate page to view and update their orders after logging in. The system also allows viewing the complete order history for each product.",
+  "requestFramePermissions": []
+}
