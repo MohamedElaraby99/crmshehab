@@ -5,7 +5,7 @@ async function testLoginAndVendors() {
     console.log('1. Testing login...');
     
     // First, login to get a real token
-    const loginResponse = await fetch('http://localhost:5000/api/auth/login', {
+    const loginResponse = await fetch('http://localhost:4031/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -25,7 +25,7 @@ async function testLoginAndVendors() {
       console.log('Login failed, trying to create admin user...');
       
       // Try to create admin user first
-      const createResponse = await fetch('http://localhost:5000/api/auth/register', {
+      const createResponse = await fetch('http://localhost:4031/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -42,7 +42,7 @@ async function testLoginAndVendors() {
       
       if (createData.success) {
         // Try login again
-        const loginResponse2 = await fetch('http://localhost:5000/api/auth/login', {
+        const loginResponse2 = await fetch('http://localhost:4031/api/auth/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -71,7 +71,7 @@ async function testVendorsAPI(token) {
   console.log('Token:', token);
   
   try {
-    const response = await fetch('http://localhost:5000/api/vendors', {
+    const response = await fetch('http://localhost:4031/api/vendors', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,

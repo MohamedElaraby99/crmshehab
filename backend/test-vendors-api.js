@@ -10,7 +10,7 @@ console.log('Testing vendors API...');
 console.log('Token:', token);
 
 // Test the API
-fetch('http://localhost:5000/api/vendors', {
+fetch('http://localhost:4031/api/vendors', {
   method: 'GET',
   headers: {
     'Authorization': `Bearer ${token}`,

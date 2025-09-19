@@ -101,7 +101,7 @@ npm start
 
 ## Environment Variables
 
-- `PORT`: Server port (default: 5000)
+- `PORT`: Server port (default: 4031)
 - `NODE_ENV`: Environment (development/production)
 - `MONGODB_URI`: MongoDB connection string
 - `JWT_SECRET`: JWT secret key

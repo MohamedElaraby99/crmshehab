@@ -15,12 +15,15 @@ const productPurchaseRoutes = require('./routes/productPurchases');
 const fieldConfigRoutes = require('./routes/fieldConfigs');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4031;
 
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'https://crm.fikra.solutions'
+  ],
   credentials: true
 }));
 app.use(morgan('combined'));
