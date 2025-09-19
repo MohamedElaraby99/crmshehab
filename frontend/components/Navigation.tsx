@@ -45,33 +45,32 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
                   </div>
                 </div>
               </div>
-              <div className="hidden sm:ml-10 sm:flex sm:space-x-1">
+              <div className="hidden sm:ml-8 sm:flex sm:space-x-1">
                 {navItems.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`group inline-flex items-center px-6 py-4 rounded-2xl text-base font-semibold transition-all duration-300 transform hover:scale-105 ${
+                    className={`group inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       isActive(item.path)
-                        ? 'bg-white/90 text-indigo-600 shadow-xl backdrop-blur-sm border border-white/50'
-                        : 'text-blue-100 hover:bg-white/20 hover:text-white hover:shadow-lg hover:backdrop-blur-sm'
+                        ? 'bg-white text-gray-900 shadow-md'
+                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
                     {item.label}
                     {isActive(item.path) && (
-                      <div className="ml-2 w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
+                      <div className="ml-2 w-1.5 h-1.5 bg-gray-900 rounded-full"></div>
                     )}
                   </Link>
                 ))}
               </div>
             </div>
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-4">
               <div className="hidden lg:block">
-                <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-6 py-3 border border-white/20 shadow-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <div className="bg-gray-700/50 rounded-lg px-3 py-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                     <div>
-                      <p className="text-white text-sm font-semibold">System Online</p>
-                      <p className="text-blue-100 text-xs">All services running</p>
+                      <p className="text-white text-xs font-medium">Online</p>
                     </div>
                   </div>
                 </div>
@@ -81,7 +80,7 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
               <div className="sm:hidden">
                 <button
                   onClick={toggleMobileMenu}
-                  className="inline-flex items-center justify-center p-3 rounded-2xl text-indigo-100 hover:text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white transition-all duration-300 backdrop-blur-sm"
+                  className="inline-flex items-center justify-center p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-gray-500 transition-all duration-200"
                   aria-expanded="false"
                 >
                   <span className="sr-only">Open main menu</span>
@@ -101,9 +100,9 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
 
               <button
                 onClick={onLogout}
-                className="hidden sm:inline-flex items-center px-6 py-4 border-2 border-white/30 text-base font-semibold rounded-2xl shadow-xl text-white bg-white/10 backdrop-blur-sm hover:bg-white hover:text-blue-600 transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white group"
+                className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 group"
               >
-                <svg className="w-5 h-5 mr-2 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
                 Logout
@@ -113,33 +112,33 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
         </div>
         
         {/* Mobile menu */}
-        <div className={`sm:hidden transition-all duration-500 ease-in-out ${
+        <div className={`sm:hidden transition-all duration-300 ease-in-out ${
           isMobileMenuOpen ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
         } overflow-hidden`}>
-          <div className="px-4 pt-4 pb-6 space-y-2 bg-gradient-to-b from-indigo-700 to-purple-700 backdrop-blur-sm border-t border-white/10">
+          <div className="px-4 pt-2 pb-4 space-y-1 bg-gray-800 border-t border-gray-700">
             {navItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className={`group flex items-center px-6 py-4 rounded-2xl text-base font-medium transition-all duration-300 transform hover:scale-105 ${
+                className={`group flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                   isActive(item.path)
-                    ? 'bg-white/90 text-blue-600 shadow-xl'
-                    : 'text-blue-100 hover:bg-white/20 hover:text-white'
+                    ? 'bg-white text-gray-900'
+                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                 }`}
               >
                 {item.label}
                 {isActive(item.path) && (
-                  <div className="ml-auto w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                  <div className="ml-auto w-1.5 h-1.5 bg-gray-900 rounded-full"></div>
                 )}
               </Link>
             ))}
-            <div className="pt-4 border-t border-white/20">
+            <div className="pt-2 border-t border-gray-700">
               <button
                 onClick={onLogout}
-                  className="w-full flex items-center justify-center px-6 py-4 rounded-2xl text-base font-medium text-blue-100 hover:bg-white/20 hover:text-white transition-all duration-300 transform hover:scale-105 group"
+                  className="w-full flex items-center justify-center px-4 py-3 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white transition-all duration-200 group"
               >
-                <svg className="w-5 h-5 mr-3 transition-transform duration-300 group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                 </svg>
                 Logout
@@ -150,7 +149,7 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
       </nav>
       
       {/* Spacer to account for fixed header */}
-      <div className="h-24"></div>
+      <div className="h-16"></div>
     </>
   );
 };

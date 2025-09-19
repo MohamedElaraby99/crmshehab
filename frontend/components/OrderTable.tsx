@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Order } from '../types';
 import OrderRow from './OrderRow';
+import * as XLSX from 'xlsx';
 
 interface OrderTableProps {
   orders: Order[];
@@ -155,6 +156,78 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     }
   };
 
+  // Excel export functionality
+  const handleExportExcel = () => {
+    try {
+      // Prepare data for export
+      const exportData = filteredOrders.map(order => {
+        const vendorName = typeof order.vendorId === 'string' ? 'Unknown Vendor' : order.vendorId?.name || 'Unknown Vendor';
+        const item = order.items[0];
+        
+        return {
+          'Order Number': order.orderNumber,
+          'Vendor': vendorName,
+          'Item Number': item?.itemNumber || '',
+          'Product Name': item?.productId?.name || '',
+          'Quantity': item?.quantity || 0,
+          'Unit Price': item?.unitPrice || 0,
+          'Total Amount': order.totalAmount || 0,
+          'Status': order.status,
+          'Order Date': new Date(order.orderDate).toLocaleDateString(),
+          'Confirm Form Shehab': order.confirmFormShehab || '',
+          'Estimated Date Ready': order.estimatedDateReady || '',
+          'Invoice Number': order.invoiceNumber || '',
+          'Transfer Amount': order.transferAmount || '',
+          'Shipping Date To Agent': order.shippingDateToAgent || '',
+          'Shipping Date To Saudi': order.shippingDateToSaudi || '',
+          'Arrival Date': order.arrivalDate || '',
+          'Notes': order.notes || ''
+        };
+      });
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+      // Set column widths
+      const columnWidths = [
+        { wch: 15 }, // Order Number
+        { wch: 20 }, // Vendor
+        { wch: 12 }, // Item Number
+        { wch: 25 }, // Product Name
+        { wch: 8 },  // Quantity
+        { wch: 12 }, // Unit Price
+        { wch: 12 }, // Total Amount
+        { wch: 12 }, // Status
+        { wch: 12 }, // Order Date
+        { wch: 18 }, // Confirm Form Shehab
+        { wch: 18 }, // Estimated Date Ready
+        { wch: 15 }, // Invoice Number
+        { wch: 15 }, // Transfer Amount
+        { wch: 20 }, // Shipping Date To Agent
+        { wch: 20 }, // Shipping Date To Saudi
+        { wch: 15 }, // Arrival Date
+        { wch: 30 }  // Notes
+      ];
+      worksheet['!cols'] = columnWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+
+      // Generate filename with current date
+      const currentDate = new Date().toISOString().split('T')[0];
+      const filename = `orders_export_${currentDate}.xlsx`;
+
+      // Export file
+      XLSX.writeFile(workbook, filename);
+
+      console.log(`✅ Exported ${exportData.length} orders to ${filename}`);
+    } catch (error) {
+      console.error('❌ Export failed:', error);
+      alert('Export failed. Please try again.');
+    }
+  };
+
   return (
     <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
       {/* Excel-like toolbar */}
@@ -184,8 +257,15 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             )}
           </div>
           <div className="flex items-center space-x-2">
-            <button className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">
-              Export Excel
+            <button 
+              onClick={handleExportExcel}
+              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-200 flex items-center space-x-1"
+              title="Export filtered orders to Excel"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Export Excel</span>
             </button>
           </div>
         </div>

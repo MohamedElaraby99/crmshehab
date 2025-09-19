@@ -9,7 +9,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onVendorLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loginType, setLoginType] = useState<'admin' | 'vendor'>('admin');
+  const [loginType, setLoginType] = useState<'admin' | 'vendor'>('vendor');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,24 +107,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onVendorLogin }) => {
             </button>
           </div>
         </form>
-        <div className="text-center text-sm text-gray-500 pt-4 border-t">
-          <p className="font-semibold">Demo Accounts:</p>
-          {loginType === 'admin' ? (
-            <>
-              <p>Username: <code className="bg-gray-200 px-1 rounded">admin</code></p>
-              <p>Username: <code className="bg-gray-200 px-1 rounded">supplierA</code></p>
-              <p>Username: <code className="bg-gray-200 px-1 rounded">supplierB</code></p>
-              <p className="mt-2 italic">Any password will work for this demo.</p>
-            </>
-          ) : (
-            <>
-              <p>Username: <code className="bg-gray-200 px-1 rounded">lacey_perez_6220</code></p>
-              <p>Password: <code className="bg-gray-200 px-1 rounded">nH6W@4mKKk&Z</code></p>
-              <p>Username: <code className="bg-gray-200 px-1 rounded">jamal_galloway_6242</code></p>
-              <p>Password: <code className="bg-gray-200 px-1 rounded">rcfTN*CAG1D#</code></p>
-            </>
-          )}
-        </div>
       </div>
     </div>
   );
