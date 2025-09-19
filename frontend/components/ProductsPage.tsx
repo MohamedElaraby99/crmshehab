@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Product, Supplier, ProductPurchase } from '../types';
-import { getAllProducts, createProduct, updateProduct, deleteProduct, getAllVendors, getProductPurchaseStats } from '../services/api';
+import { Product, ProductPurchase } from '../types';
+import { getAllProducts, createProduct, updateProduct, deleteProduct, getProductPurchaseStats } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
 interface ProductsPageProps {
@@ -9,13 +9,10 @@ interface ProductsPageProps {
 
 const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
   const [products, setProducts] = useState<Product[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [supplierFilter, setSupplierFilter] = useState('all');
   const [selectedProductHistory, setSelectedProductHistory] = useState<{product: Product, purchases: ProductPurchase[]} | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
@@ -23,32 +20,53 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
     fetchData();
   }, []);
 
-  const fetchData = () => {
+  const fetchData = async () => {
     setLoading(true);
-    const allProducts = getAllProducts();
-    const allSuppliers = getAllVendors(); // Using vendors as suppliers for now
-    setProducts(allProducts);
-    setSuppliers(allSuppliers);
-    setLoading(false);
+    try {
+      const allProducts = await getAllProducts();
+      setProducts(allProducts);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCreateProduct = (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
-    createProduct(productData);
-    fetchData();
-    setShowModal(false);
+  const handleCreateProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const created = await createProduct(productData);
+      if (created) {
+        await fetchData();
+        setShowModal(false);
+      }
+    } catch (error) {
+      console.error('Failed to create product:', error);
+    }
   };
 
-  const handleUpdateProduct = (productData: Product) => {
-    updateProduct(productData);
-    fetchData();
-    setShowModal(false);
-    setEditingProduct(null);
+  const handleUpdateProduct = async (productData: Product) => {
+    try {
+      const updated = await updateProduct(productData.id, productData);
+      if (updated) {
+        await fetchData();
+        setShowModal(false);
+        setEditingProduct(null);
+      }
+    } catch (error) {
+      console.error('Failed to update product:', error);
+    }
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
-      deleteProduct(id);
-      fetchData();
+      try {
+        const deleted = await deleteProduct(id);
+        if (deleted) {
+          await fetchData();
+        }
+      } catch (error) {
+        console.error('Failed to delete product:', error);
+      }
     }
   };
 
@@ -57,24 +75,38 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
     setShowModal(true);
   };
 
-  const handleViewHistory = (product: Product) => {
-    const stats = getProductPurchaseStats(product.id);
-    setSelectedProductHistory({
-      product,
-      purchases: stats.purchases
-    });
+  const handleViewHistory = async (product: Product) => {
+    try {
+      const stats = await getProductPurchaseStats(product.id);
+      setSelectedProductHistory({
+        product,
+        purchases: stats.purchases
+      });
+    } catch (error) {
+      console.error('Failed to fetch product history:', error);
+    }
   };
 
-  const categories = [...new Set(products.map(p => p.category))];
-  const suppliersList = suppliers.map(s => ({ id: s.id, name: s.name }));
+  // Helper function to calculate product purchase stats synchronously
+  const getProductPurchaseStatsSync = (productId: string) => {
+    // For now, return default stats since we don't have purchase data loaded
+    // In a real implementation, you would load product purchases and calculate from that
+    return {
+      totalPurchases: 0,
+      totalQuantity: 0,
+      totalAmount: 0,
+      averagePrice: 0,
+      uniqueVendors: 0,
+      lastPurchase: null,
+      purchases: []
+    };
+  };
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.itemNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || product.category === categoryFilter;
-    const matchesSupplier = supplierFilter === 'all' || product.supplierId === supplierFilter;
-    return matchesSearch && matchesCategory && matchesSupplier;
+    return matchesSearch;
   });
 
   if (loading) {
@@ -123,52 +155,18 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
         </div>
         {/* Filters */}
         <div className="mb-6 bg-white p-4 rounded-lg shadow">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-                Search Products
-              </label>
-              <input
-                type="text"
-                id="search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name, item number, or description..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Category
-              </label>
-              <select
-                id="category"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Categories</option>
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="supplier" className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Supplier
-              </label>
-              <select
-                id="supplier"
-                value={supplierFilter}
-                onChange={(e) => setSupplierFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="all">All Suppliers</option>
-                {suppliersList.map(supplier => (
-                  <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+              Search Products
+            </label>
+            <input
+              type="text"
+              id="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name, item number, or description..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            />
           </div>
         </div>
 
@@ -192,28 +190,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
                         Item Number
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Category
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Price
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Stock
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Supplier
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Purchase History
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredProducts.map((product) => {
-                      const stats = getProductPurchaseStats(product.id);
+                      const stats = getProductPurchaseStatsSync(product.id);
                       return (
                         <tr key={product.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -231,45 +214,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900 font-mono">{product.itemNumber}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                              {product.category}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">${product.price.toFixed(2)}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              product.stock > 50 ? 'bg-green-100 text-green-800' : 
-                              product.stock > 10 ? 'bg-yellow-100 text-yellow-800' : 
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {product.stock}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">
-                              {suppliersList.find(s => s.id === product.supplierId)?.name || 'Unknown'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {stats.totalPurchases > 0 ? (
-                              <div className="text-sm">
-                                <div className="text-gray-900 font-medium">{stats.totalPurchases} purchases</div>
-                                <div className="text-gray-500 text-xs">
-                                  {stats.uniqueVendors} vendors • ${stats.totalAmount.toFixed(0)} total
-                                </div>
-                                {stats.lastPurchase && (
-                                  <div className="text-gray-400 text-xs">
-                                    Last: {new Date(stats.lastPurchase.purchaseDate).toLocaleDateString()}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">No history</span>
-                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">
@@ -306,7 +250,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
               /* Grid View */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredProducts.map((product) => {
-                  const stats = getProductPurchaseStats(product.id);
+                  const stats = getProductPurchaseStatsSync(product.id);
                   return (
                     <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                       <div className="flex justify-between items-start mb-3">
@@ -319,29 +263,8 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
                             <p className="text-sm text-gray-500 font-mono">{product.itemNumber}</p>
                           </div>
                         </div>
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          product.stock > 50 ? 'bg-green-100 text-green-800' : 
-                          product.stock > 10 ? 'bg-yellow-100 text-yellow-800' : 
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {product.stock}
-                        </span>
                       </div>
                       
-                      <div className="space-y-2 text-sm text-gray-600 mb-4">
-                        <div className="flex justify-between">
-                          <span className="font-medium">Category:</span>
-                          <span className="text-blue-600 font-medium">{product.category}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="font-medium">Price:</span>
-                          <span className="font-semibold text-gray-900">${product.price.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="font-medium">Supplier:</span>
-                          <span className="text-gray-700">{suppliersList.find(s => s.id === product.supplierId)?.name || 'Unknown'}</span>
-                        </div>
-                      </div>
                       
                       {/* Purchase History Summary */}
                       {stats.totalPurchases > 0 && (
@@ -361,12 +284,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
                               <span className="text-gray-500">Total Spent:</span> ${stats.totalAmount.toFixed(0)}
                             </div>
                           </div>
-                          {stats.lastPurchase && (
-                            <div className="mt-2 text-xs text-gray-500">
-                              Last: {new Date(stats.lastPurchase.purchaseDate).toLocaleDateString()} 
-                              from {stats.lastPurchase.vendorName}
-                            </div>
-                          )}
+                      
                         </div>
                       )}
                       
@@ -413,8 +331,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
       {showModal && (
         <ProductModal
           product={editingProduct}
-          suppliers={suppliersList}
-          categories={categories}
           onSave={editingProduct ? handleUpdateProduct : handleCreateProduct}
           onClose={() => {
             setShowModal(false);
@@ -439,26 +355,33 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
 // Product Modal Component
 interface ProductModalProps {
   product: Product | null;
-  suppliers: { id: string; name: string }[];
-  categories: string[];
   onSave: (product: any) => void;
   onClose: () => void;
 }
 
-const ProductModal: React.FC<ProductModalProps> = ({ product, suppliers, categories, onSave, onClose }) => {
+const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose }) => {
   const [formData, setFormData] = useState({
     itemNumber: product?.itemNumber || '',
     name: product?.name || '',
-    description: product?.description || '',
-    category: product?.category || '',
-    price: product?.price || 0,
-    stock: product?.stock || 0,
-    supplierId: product?.supplierId || ''
+    description: product?.description || ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(product ? { ...product, ...formData } : formData);
+    // Only send the fields we want, regardless of what's in the existing product
+    const productData = {
+      itemNumber: formData.itemNumber,
+      name: formData.name,
+      description: formData.description
+    };
+    
+    // If editing, include the ID
+    if (product) {
+      productData.id = product.id;
+    }
+    
+    console.log('ProductModal: Sending product data:', productData);
+    onSave(productData);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -507,65 +430,6 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, suppliers, categor
                 rows={3}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Category</label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Supplier</label>
-                <select
-                  name="supplierId"
-                  value={formData.supplierId}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Supplier</option>
-                  {suppliers.map(supplier => (
-                    <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Price ($)</label>
-                <input
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  min="0"
-                  step="0.01"
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Stock Quantity</label>
-                <input
-                  type="number"
-                  name="stock"
-                  value={formData.stock}
-                  onChange={handleChange}
-                  min="0"
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
             </div>
             <div className="flex justify-end space-x-3 pt-4">
               <button

@@ -1,18 +1,46 @@
 
+export interface OrderItem {
+  productId: {
+    id: string;
+    name: string;
+  };
+  itemNumber: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
 export interface Order {
   id: string;
-  itemNumber: string;
-  productName: string;
-  quantity: number;
-  price: number;
-  confirmFormShehab: string;
-  estimatedDateReady: string;
-  invoiceNumber: string;
-  transferAmount: number | null;
-  shippingDateToAgent: string;
-  shippingDateToSaudi: string;
-  arrivalDate: string;
-  notes: string;
+  orderNumber: string;
+  supplierId: string;
+  vendorId: string | { _id: string; name: string; contactPerson?: string; email?: string };
+  items: OrderItem[];
+  totalAmount: number;
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  confirmFormShehab?: string;
+  shippingAddress?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    country?: string;
+  };
+  notes?: string;
+  orderDate: string;
+  expectedDeliveryDate?: string;
+  actualDeliveryDate?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Additional fields that might be added dynamically
+  estimatedDateReady?: string;
+  invoiceNumber?: string;
+  transferAmount?: number | null;
+  shippingDateToAgent?: string;
+  shippingDateToSaudi?: string;
+  arrivalDate?: string;
 }
 
 export interface Supplier {
@@ -34,10 +62,6 @@ export interface Product {
   itemNumber: string;
   name: string;
   description: string;
-  category: string;
-  price: number;
-  stock: number;
-  supplierId: string;
   createdAt: string;
   updatedAt: string;
 }

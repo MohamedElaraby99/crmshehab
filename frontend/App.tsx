@@ -6,27 +6,74 @@ import SupplierDashboard from './components/SupplierDashboard';
 import VendorDashboard from './components/VendorDashboard';
 import VendorsPage from './components/VendorsPage';
 import ProductsPage from './components/ProductsPage';
+import OrdersPage from './components/OrdersPage';
 import Navigation from './components/Navigation';
 import { User, Vendor } from './types';
-import { authenticateUser, authenticateVendor, updateVendorByVendor } from './services/api';
+import { authenticateUser, authenticateVendor, updateVendorByVendor, getCurrentUser, getCurrentVendor, isAuthenticated } from './services/api';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentVendor, setCurrentVendor] = useState<Vendor | null>(null);
 
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setCurrentVendor(null);
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem('currentVendor');
+    localStorage.removeItem('authToken');
+  };
+
   useEffect(() => {
-    const storedUser = sessionStorage.getItem('currentUser');
-    const storedVendor = sessionStorage.getItem('currentVendor');
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-    if (storedVendor) {
-      setCurrentVendor(JSON.parse(storedVendor));
-    }
+    const restoreUserSession = async () => {
+      if (!isAuthenticated()) {
+        handleLogout();
+        return;
+      }
+
+      const storedUser = sessionStorage.getItem('currentUser');
+      const storedVendor = sessionStorage.getItem('currentVendor');
+      
+      if (storedUser) {
+        try {
+          // Validate token by fetching current user
+          const user = await getCurrentUser();
+          if (user) {
+            setCurrentUser(user);
+            sessionStorage.setItem('currentUser', JSON.stringify(user));
+          } else {
+            // Token is invalid, clear everything
+            handleLogout();
+          }
+        } catch (error) {
+          // Token is invalid, clear everything
+          handleLogout();
+        }
+      } else if (storedVendor) {
+        try {
+          // Validate token by fetching current vendor
+          const vendor = await getCurrentVendor();
+          if (vendor) {
+            setCurrentVendor(vendor);
+            sessionStorage.setItem('currentVendor', JSON.stringify(vendor));
+          } else {
+            // Token is invalid, clear everything
+            handleLogout();
+          }
+        } catch (error) {
+          // Token is invalid, clear everything
+          handleLogout();
+        }
+      } else {
+        // No stored user/vendor, clear everything
+        handleLogout();
+      }
+    };
+
+    restoreUserSession();
   }, []);
 
-  const handleLogin = (username: string, password: string): boolean => {
-    const user = authenticateUser(username, password);
+  const handleLogin = async (username: string, password: string): Promise<boolean> => {
+    const user = await authenticateUser(username, password);
     if (user) {
       setCurrentUser(user);
       setCurrentVendor(null); // Clear vendor if admin logs in
@@ -37,8 +84,8 @@ const App: React.FC = () => {
     return false;
   };
 
-  const handleVendorLogin = (username: string, password: string): boolean => {
-    const vendor = authenticateVendor(username, password);
+  const handleVendorLogin = async (username: string, password: string): Promise<boolean> => {
+    const vendor = await authenticateVendor(username, password);
     if (vendor) {
       setCurrentVendor(vendor);
       setCurrentUser(null); // Clear user if vendor logs in
@@ -47,13 +94,6 @@ const App: React.FC = () => {
       return true;
     }
     return false;
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setCurrentVendor(null);
-    sessionStorage.removeItem('currentUser');
-    sessionStorage.removeItem('currentVendor');
   };
 
   const handleVendorUpdate = (updatedVendor: Vendor) => {
@@ -80,7 +120,6 @@ const App: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
                       </div>
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full border-2 border-white animate-pulse"></div>
                     </div>
                     <div>
                       <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
@@ -131,6 +170,7 @@ const App: React.FC = () => {
         <Navigation onLogout={handleLogout} />
         <Routes>
           <Route path="/" element={<SupplierDashboard user={currentUser!} onLogout={handleLogout} />} />
+          <Route path="/orders" element={<OrdersPage onLogout={handleLogout} />} />
           <Route path="/vendors" element={<VendorsPage onLogout={handleLogout} />} />
           <Route path="/products" element={<ProductsPage onLogout={handleLogout} />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -19,31 +19,63 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
     fetchVendors();
   }, []);
 
-  const fetchVendors = () => {
+  const fetchVendors = async () => {
     setLoading(true);
-    const allVendors = getAllVendors();
-    setVendors(allVendors);
-    setLoading(false);
+    try {
+      const allVendors = await getAllVendors();
+      console.log('Fetched vendors:', allVendors);
+      setVendors(allVendors);
+    } catch (error) {
+      console.error('Failed to fetch vendors:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCreateVendor = (vendorData: Omit<Vendor, 'id' | 'createdAt' | 'updatedAt' | 'username' | 'password' | 'userId'>) => {
-    const newVendor = createVendor(vendorData);
-    fetchVendors();
-    setShowModal(false);
-    setShowCredentials(newVendor);
+  const handleCreateVendor = async (vendorData: Omit<Vendor, 'id' | 'createdAt' | 'updatedAt' | 'username' | 'password' | 'userId'>) => {
+    try {
+      console.log('Creating vendor with data:', vendorData);
+      const newVendor = await createVendor(vendorData);
+      console.log('Created vendor response:', newVendor);
+      if (newVendor) {
+        // Add the new vendor to the existing list instead of refetching
+        setVendors(prevVendors => [...prevVendors, newVendor]);
+        setShowModal(false);
+        setShowCredentials(newVendor);
+      }
+    } catch (error) {
+      console.error('Failed to create vendor:', error);
+    }
   };
 
-  const handleUpdateVendor = (vendorData: Vendor) => {
-    updateVendor(vendorData);
-    fetchVendors();
-    setShowModal(false);
-    setEditingVendor(null);
+  const handleUpdateVendor = async (vendorData: Vendor) => {
+    try {
+      console.log('Updating vendor with data:', vendorData);
+      const updated = await updateVendor(vendorData.id, vendorData);
+      console.log('Update response:', updated);
+      if (updated) {
+        console.log('Vendor updated successfully, refreshing list...');
+        await fetchVendors();
+        setShowModal(false);
+        setEditingVendor(null);
+      } else {
+        console.error('Update returned null/undefined');
+      }
+    } catch (error) {
+      console.error('Failed to update vendor:', error);
+    }
   };
 
-  const handleDeleteVendor = (id: string) => {
+  const handleDeleteVendor = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this vendor?')) {
-      deleteVendor(id);
-      fetchVendors();
+      try {
+        const deleted = await deleteVendor(id);
+        if (deleted) {
+          await fetchVendors();
+        }
+      } catch (error) {
+        console.error('Failed to delete vendor:', error);
+      }
     }
   };
 
@@ -149,7 +181,7 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">{vendor.name}</div>
-                          <div className="text-sm text-gray-500">ID: {vendor.id}</div>
+                         
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -257,9 +289,49 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
     status: vendor?.status || 'active' as 'active' | 'inactive'
   });
 
+  // Update form data when vendor prop changes
+  useEffect(() => {
+    if (vendor) {
+      setFormData({
+        name: vendor.name || '',
+        contactPerson: vendor.contactPerson || '',
+        email: vendor.email || '',
+        phone: vendor.phone || '',
+        address: vendor.address || '',
+        city: vendor.city || '',
+        country: vendor.country || '',
+        status: vendor.status || 'active'
+      });
+    } else {
+      // Reset form for new vendor
+      setFormData({
+        name: '',
+        contactPerson: '',
+        email: '',
+        phone: '',
+        address: '',
+        city: '',
+        country: '',
+        status: 'active'
+      });
+    }
+  }, [vendor]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(vendor ? { ...vendor, ...formData } : formData);
+    console.log('VendorModal handleSubmit - vendor:', vendor);
+    console.log('VendorModal handleSubmit - formData:', formData);
+    
+    if (vendor) {
+      // For updates, only send the form data with the vendor ID
+      const updateData = { id: vendor.id, ...formData };
+      console.log('VendorModal sending update data:', updateData);
+      onSave(updateData);
+    } else {
+      // For creation, send the form data as is
+      console.log('VendorModal sending create data:', formData);
+      onSave(formData);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

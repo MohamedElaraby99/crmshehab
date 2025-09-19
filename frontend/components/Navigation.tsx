@@ -15,6 +15,7 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
 
   const navItems = [
     { path: '/', label: 'Dashboard' },
+    { path: '/orders', label: 'Orders'},
     { path: '/vendors', label: 'Vendors'},
     { path: '/products', label: 'Products'},
   ];
@@ -25,22 +26,22 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 shadow-2xl backdrop-blur-sm border-b border-white/10">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-slate-900 via-gray-800 to-slate-900 shadow-xl backdrop-blur-md border-b border-gray-700/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-24">
+          <div className="flex justify-between h-16">
             <div className="flex">
               <div className="flex-shrink-0 flex items-center">
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-3">
                   <div className="relative">
-                    <div className="bg-white/20 backdrop-blur-sm p-3 rounded-2xl shadow-lg border border-white/30">
-                      <svg className="h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-xl shadow-lg">
+                      <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                       </svg>
                     </div>
                   </div>
                   <div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight">CRM System</h1>
-                    <p className="text-blue-100 text-sm font-medium">Business Management Portal</p>
+                    <h1 className="text-xl font-bold text-white tracking-tight">CRM System</h1>
+                    <p className="text-gray-300 text-xs">Business Portal</p>
                   </div>
                 </div>
               </div>

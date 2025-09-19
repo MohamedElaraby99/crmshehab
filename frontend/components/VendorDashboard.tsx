@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Vendor, Order } from '../types';
-import { getVendorById, getOrdersBySupplierId, updateOrder as apiUpdateOrder, getAllOrders } from '../services/api';
+import { getVendorById, getOrdersByVendorId, updateOrder as apiUpdateOrder, getAllOrders, updateVendorByVendor } from '../services/api';
 import OrderTable from './OrderTable';
 import ProductHistoryModal from './ProductHistoryModal';
+import DynamicOrderForm from './DynamicOrderForm';
 
 interface VendorDashboardProps {
   user: Vendor;
@@ -22,23 +23,48 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
     fetchDashboardData();
   }, [user]);
 
-  const fetchDashboardData = () => {
+  const fetchDashboardData = async () => {
     setLoading(true);
-    const vendorData = getVendorById(user.id);
-    setVendor(vendorData || user);
-    
-    // Get orders related to this vendor (you can customize this logic)
-    const allOrdersData = getAllOrders();
-    setAllOrders(allOrdersData);
-    
-    // For now, show all orders, but you can filter by vendor-specific criteria
-    setOrders(allOrdersData);
-    setLoading(false);
+    try {
+      const [vendorData, vendorOrders, allOrdersData] = await Promise.all([
+        getVendorById(user.id),
+        getOrdersByVendorId(user.id),
+        getAllOrders()
+      ]);
+      setVendor(vendorData || user);
+      setOrders(vendorOrders);
+      setAllOrders(allOrdersData);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateOrder = (updatedOrder: Order) => {
-    apiUpdateOrder(updatedOrder);
-    fetchDashboardData();
+  const handleUpdateOrder = async (updatedOrder: Order) => {
+    try {
+      // Optimistic update - update the local state immediately
+      setOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === updatedOrder.id ? updatedOrder : order
+        )
+      );
+      setAllOrders(prevOrders => 
+        prevOrders.map(order => 
+          order.id === updatedOrder.id ? updatedOrder : order
+        )
+      );
+      
+      // Then make the API call
+      const updated = await apiUpdateOrder(updatedOrder.id, updatedOrder);
+      
+      // Only refresh if there was an error (to sync with server state)
+      // This prevents unnecessary full refreshes
+    } catch (error) {
+      console.error('Failed to update order:', error);
+      // Revert optimistic update on error
+      await fetchDashboardData();
+    }
   };
   
   const handleDeleteOrder = (orderId: string) => {
@@ -50,10 +76,17 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
     setSelectedProduct(itemNumber);
   };
 
-  const handleUpdateVendor = (updatedVendor: Vendor) => {
-    onUpdateVendor(updatedVendor);
-    setVendor(updatedVendor);
-    setShowEditModal(false);
+  const handleUpdateVendor = async (updatedVendor: Vendor) => {
+    try {
+      const updated = await updateVendorByVendor(updatedVendor.id, updatedVendor);
+      if (updated) {
+        onUpdateVendor(updated);
+        setVendor(updated);
+        setShowEditModal(false);
+      }
+    } catch (error) {
+      console.error('Failed to update vendor:', error);
+    }
   };
 
   if (loading) {
@@ -67,66 +100,17 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
           <h1 className="text-3xl font-bold text-gray-900">
             Welcome, {vendor?.name}
           </h1>
-          <p className="mt-2 text-gray-600">Manage your vendor information and view related orders</p>
+          <p className="mt-2 text-gray-600">Manage your orders</p>
         </div>
 
-        {/* Vendor Information Card */}
-        <div className="bg-white shadow rounded-lg mb-6">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900">Vendor Information</h3>
-                <p className="mt-1 text-sm text-gray-500">Your company details and contact information</p>
-              </div>
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Edit Information
-              </button>
-            </div>
-            
-            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Company Name</dt>
-                <dd className="mt-1 text-sm text-gray-900">{vendor?.name}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Contact Person</dt>
-                <dd className="mt-1 text-sm text-gray-900">{vendor?.contactPerson}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Email</dt>
-                <dd className="mt-1 text-sm text-gray-900">{vendor?.email}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Phone</dt>
-                <dd className="mt-1 text-sm text-gray-900">{vendor?.phone}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">City</dt>
-                <dd className="mt-1 text-sm text-gray-900">{vendor?.city}, {vendor?.country}</dd>
-              </div>
-              <div>
-                <dt className="text-sm font-medium text-gray-500">Status</dt>
-                <dd className="mt-1">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    vendor?.status === 'active' 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {vendor?.status}
-                  </span>
-                </dd>
-              </div>
-            </div>
-          </div>
-        </div>
+      
 
         {/* Orders Section */}
         <div className="bg-white shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Related Orders</h3>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Related Orders</h3>
+            </div>
             <OrderTable 
               orders={orders} 
               onUpdateOrder={handleUpdateOrder}
@@ -139,13 +123,40 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
       </div>
 
       {/* Product History Modal */}
-      {selectedProduct && (
-        <ProductHistoryModal
-          itemNumber={selectedProduct}
-          allOrders={allOrders}
-          onClose={() => setSelectedProduct(null)}
-        />
-      )}
+      {selectedProduct && (() => {
+        // Find product information from orders
+        const productOrders = allOrders.filter(order => 
+          order.items?.some(item => item.itemNumber === selectedProduct)
+        );
+        
+        if (productOrders.length === 0) return null;
+        
+        const firstItem = productOrders[0].items.find(item => item.itemNumber === selectedProduct);
+        if (!firstItem) return null;
+        
+        // Convert orders to ProductPurchase format
+        const purchases = productOrders.map(order => ({
+          id: order.id,
+          productId: firstItem.productId.id,
+          vendorId: typeof order.vendorId === 'string' ? order.vendorId : order.vendorId._id,
+          vendorName: typeof order.vendorId === 'string' ? 'Unknown' : order.vendorId.name,
+          quantity: firstItem.quantity,
+          price: firstItem.unitPrice,
+          totalAmount: firstItem.totalPrice,
+          purchaseDate: order.orderDate,
+          orderId: order.id,
+          notes: order.notes
+        }));
+        
+        return (
+          <ProductHistoryModal
+            productId={firstItem.productId.id}
+            productName={firstItem.productId.name}
+            purchases={purchases}
+            onClose={() => setSelectedProduct(null)}
+          />
+        );
+      })()}
 
       {/* Vendor Edit Modal */}
       {showEditModal && vendor && (

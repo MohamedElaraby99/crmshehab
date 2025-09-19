@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 
 interface LoginPageProps {
-  onLogin: (username: string, password: string) => boolean;
-  onVendorLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean>;
+  onVendorLogin: (username: string, password: string) => Promise<boolean>;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onVendorLogin }) => {
@@ -11,14 +11,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onVendorLogin }) => {
   const [error, setError] = useState('');
   const [loginType, setLoginType] = useState<'admin' | 'vendor'>('admin');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = loginType === 'admin' 
-      ? onLogin(username, password)
-      : onVendorLogin(username, password);
-    if (!success) {
-      setError('Invalid username or password.');
+    try {
+      const success = loginType === 'admin' 
+        ? await onLogin(username, password)
+        : await onVendorLogin(username, password);
+      if (!success) {
+        setError('Invalid username or password.');
+      }
+    } catch (error) {
+      setError('Login failed. Please try again.');
     }
   };
 
@@ -48,7 +52,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onVendorLogin }) => {
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
-            Admin/Supplier
+            Admin
           </button>
           <button
             type="button"
@@ -114,10 +118,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onVendorLogin }) => {
             </>
           ) : (
             <>
-              <p>Username: <code className="bg-gray-200 px-1 rounded">autoparts_central</code></p>
-              <p>Password: <code className="bg-gray-200 px-1 rounded">AutoParts2024!</code></p>
-              <p>Username: <code className="bg-gray-200 px-1 rounded">global_motors</code></p>
-              <p>Password: <code className="bg-gray-200 px-1 rounded">GlobalMotors2024!</code></p>
+              <p>Username: <code className="bg-gray-200 px-1 rounded">lacey_perez_6220</code></p>
+              <p>Password: <code className="bg-gray-200 px-1 rounded">nH6W@4mKKk&Z</code></p>
+              <p>Username: <code className="bg-gray-200 px-1 rounded">jamal_galloway_6242</code></p>
+              <p>Password: <code className="bg-gray-200 px-1 rounded">rcfTN*CAG1D#</code></p>
             </>
           )}
         </div>
