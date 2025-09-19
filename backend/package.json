@@ -10,6 +10,10 @@
     "create-admin": "node scripts/createAdminUser.js",
     "create-admin:help": "node scripts/createAdminUser.js --help",
     "test-cors": "node scripts/testCors.js",
+    "test-production-cors": "node scripts/testProductionCors.js",
+    "diagnose-production": "node scripts/diagnoseProduction.js",
+    "test-body-parser": "node scripts/testBodyParser.js",
+    "quick-cors-fix": "node scripts/quickCorsFix.js",
     "setup-production": "node scripts/deployProduction.js"
   },
   "keywords": [

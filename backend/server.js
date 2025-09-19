@@ -80,8 +80,54 @@ app.use((req, res, next) => {
 });
 
 app.use(morgan('combined'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+
+// Enhanced Body Parser configuration
+app.use(express.json({ 
+  limit: '50mb',
+  type: 'application/json',
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf);
+    } catch (e) {
+      console.error('Invalid JSON received:', e.message);
+      res.status(400).json({ 
+        success: false, 
+        message: 'Invalid JSON format' 
+      });
+    }
+  }
+}));
+
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '50mb',
+  parameterLimit: 1000
+}));
+
+// Raw body parser for specific routes if needed
+app.use('/api/webhooks', express.raw({ type: 'application/json', limit: '10mb' }));
+
+// Middleware to handle content-type issues
+app.use((req, res, next) => {
+  // Log request details for debugging
+  console.log('Request received:', {
+    method: req.method,
+    url: req.url,
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length'],
+    userAgent: req.headers['user-agent']
+  });
+
+  // Handle missing content-type for JSON requests
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    if (!req.headers['content-type']) {
+      console.warn('Missing Content-Type header, setting to application/json');
+      req.headers['content-type'] = 'application/json';
+    }
+  }
+
+  next();
+});
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/crm_test_auth', {
@@ -114,6 +160,24 @@ app.get('/api/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err.stack);
+  
+  // Handle specific body parser errors
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid JSON format in request body',
+      error: 'JSON_PARSE_ERROR'
+    });
+  }
+  
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({
+      success: false,
+      message: 'Request body too large',
+      error: 'PAYLOAD_TOO_LARGE'
+    });
+  }
+  
   res.status(500).json({
     success: false,
     message: 'Internal server error',
