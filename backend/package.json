@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "create-admin": "node scripts/createAdminUser.js",
-    "create-admin:help": "node scripts/createAdminUser.js --help"
+    "create-admin:help": "node scripts/createAdminUser.js --help",
+    "test-cors": "node scripts/testCors.js",
+    "setup-production": "node scripts/deployProduction.js"
   },
   "keywords": [
     "crm",
