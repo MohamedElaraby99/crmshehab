@@ -19,6 +19,7 @@ export interface Order {
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   priceApprovalStatus?: 'pending' | 'approved' | 'rejected';
   confirmFormShehab?: string;
+  itemImageUrl?: string;
   shippingAddress?: {
     street?: string;
     city?: string;
@@ -47,6 +48,7 @@ export interface Order {
 export interface User {
   id: string;
   username: string;
+  role?: 'admin' | 'vendor' | 'client';
   password?: string; // Should not be stored long term
 }
 
@@ -55,6 +57,8 @@ export interface Product {
   itemNumber: string;
   name: string;
   description: string;
+  sellingPrice?: number;
+  stock?: number;
   createdAt: string;
   updatedAt: string;
 }

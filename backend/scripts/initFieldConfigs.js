@@ -144,6 +144,20 @@ const defaultConfigs = [
       { value: 'cancelled', label: 'Cancelled' }
     ],
     order: 14
+  },
+  {
+    name: 'priceApprovalStatus',
+    label: 'Price Approval Status',
+    type: 'select',
+    required: false,
+    editableBy: 'admin',
+    visibleTo: 'both',
+    options: [
+      { value: 'pending', label: 'Pending' },
+      { value: 'approved', label: 'Approved' },
+      { value: 'rejected', label: 'Rejected' }
+    ],
+    order: 15
   }
 ];
 

@@ -9,11 +9,10 @@ interface OrderTableProps {
   onUpdateOrder?: (order: Order) => void;
   onDeleteOrder?: (orderId: string) => void;
   onViewHistory?: (itemNumber: string) => void;
-  onConfirmOrder?: (orderId: string) => void;
   userIsAdmin: boolean;
 }
 
-const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDeleteOrder, onViewHistory, onConfirmOrder, userIsAdmin }) => {
+const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDeleteOrder, onViewHistory, userIsAdmin }) => {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -24,11 +23,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
 
   // Excel-like column configuration with widths
   const allColumns = [
+    { key: 'itemImage', label: 'ITEM IMAGE', width: 120, type: 'image' },
     { key: 'itemNumber', label: 'ITEM NUMBER', width: 150, type: 'text' },
     { key: 'quantity', label: 'QTY', width: 80, type: 'number' },
     { key: 'price', label: 'PRICE', width: 100, type: 'number' },
     { key: 'total', label: 'TOTAL', width: 110, type: 'number' },
-    { key: 'priceApprovalStatus', label: 'PRICE APPROVAL', width: 130, type: 'text' },
+    { key: 'priceApprovalStatus', label: 'PRICE APPROVAL', width: 130, type: 'select' },
     { key: 'confirmFormShehab', label: 'CONFIRM FORM SHEHAB ', width: 150, type: 'date' },
     { key: 'estimatedDateReady', label: 'EST. DATE READY', width: 140, type: 'date' },
     { key: 'invoiceNumber', label: 'INVOICE #', width: 120, type: 'text' },
@@ -359,7 +359,6 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                 onUpdate={onUpdateOrder || (() => {})}
                 onDelete={onDeleteOrder || (() => {})}
                 onViewHistory={onViewHistory || (() => {})}
-                onConfirm={onConfirmOrder}
                 userIsAdmin={userIsAdmin} 
                 isSelected={selectedRows.has(order.id)}
                 onSelect={() => handleRowSelect(order.id)}

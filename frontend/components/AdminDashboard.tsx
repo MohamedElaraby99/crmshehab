@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, Order } from '../types';
-import { getAllOrders, updateOrder as apiUpdateOrder } from '../services/api';
+import { User, Order, Vendor, Product, ProductPurchase } from '../types';
+import { getAllOrders, updateOrder as apiUpdateOrder, getAllVendors, getAllProducts, getProductPurchases } from '../services/api';
 import OrderTable from './OrderTable';
 import ProductHistoryModal from './ProductHistoryModal';
 import DynamicOrderForm from './DynamicOrderForm';
@@ -17,15 +17,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [showProductHistory, setShowProductHistory] = useState(false);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productPurchases, setProductPurchases] = useState<ProductPurchase[]>([]);
 
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const ordersData = await getAllOrders();
+      const [ordersData, vendorsData, productsData] = await Promise.all([
+        getAllOrders(),
+        getAllVendors(),
+        getAllProducts()
+      ]);
       setOrders(ordersData);
+      setVendors(vendorsData);
+      setProducts(productsData);
     } catch (error) {
       console.error('Error fetching orders:', error);
       setOrders([]);
+      setVendors([]);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -60,8 +71,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     setEditingOrder(null);
   };
 
-  const handleProductHistory = (productId: string) => {
+  const handleProductHistory = async (productId: string) => {
     setSelectedProduct(productId);
+    try {
+      const purchases = await getProductPurchases(productId);
+      setProductPurchases(purchases);
+    } catch (err) {
+      console.error('Error fetching product purchases:', err);
+      setProductPurchases([]);
+    }
     setShowProductHistory(true);
   };
 
@@ -127,10 +145,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                       <div className="ml-5 w-0 flex-1">
                         <dl>
                           <dt className="text-sm font-medium text-gray-500 truncate">
-                            Completed Orders
+                            Confirmed Orders
                           </dt>
                           <dd className="text-lg font-medium text-gray-900">
-                            {orders.filter(order => order.status === 'delivered').length}
+                            {orders.filter(order => order.status === 'confirmed').length}
                           </dd>
                         </dl>
                       </div>
@@ -183,9 +201,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       {showEditModal && editingOrder && (
         <DynamicOrderForm
           order={editingOrder}
-          onSave={handleUpdateOrder}
-          onCancel={handleCloseEditModal}
-          isEdit={true}
+          vendors={vendors}
+          products={products}
+          userRole={'admin'}
+          onSave={(updated) => { handleUpdateOrder(updated as Order); }}
+          onClose={handleCloseEditModal}
         />
       )}
 
@@ -193,6 +213,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
       {showProductHistory && selectedProduct && (
         <ProductHistoryModal
           productId={selectedProduct}
+          productName={products.find(p => p.id === selectedProduct)?.name || ''}
+          purchases={productPurchases}
           onClose={handleCloseProductHistory}
         />
       )}

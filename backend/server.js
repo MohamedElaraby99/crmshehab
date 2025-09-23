@@ -1,4 +1,6 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -12,6 +14,7 @@ const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const productPurchaseRoutes = require('./routes/productPurchases');
 const fieldConfigRoutes = require('./routes/fieldConfigs');
+const demandRoutes = require('./routes/demands');
 
 const app = express();
 const PORT = process.env.PORT || 4031;
@@ -144,6 +147,19 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/product-purchases', productPurchaseRoutes);
 app.use('/api/field-configs', fieldConfigRoutes);
+app.use('/api/demands', demandRoutes);
+
+// Static files for uploads (folder name: 'upload')
+const uploadDir = path.join(__dirname, 'upload');
+if (!fs.existsSync(uploadDir)) {
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log('📁 Created upload directory at', uploadDir);
+  } catch (e) {
+    console.error('❌ Failed to create uploads directory:', e);
+  }
+}
+app.use('/upload', express.static(uploadDir));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

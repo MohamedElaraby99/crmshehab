@@ -5,49 +5,13 @@ const { authenticateUser, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all users
+// List users (admin)
 router.get('/', authenticateUser, requireAdmin, async (req, res) => {
   try {
-    const users = await User.find({ isActive: true })
-      .select('-password')
-      .sort({ createdAt: -1 });
-
-    res.json({
-      success: true,
-      data: users
-    });
+    const users = await User.find().select('-password');
+    res.json({ success: true, data: users });
   } catch (error) {
-    console.error('Get users error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Get user by ID
-router.get('/:id', authenticateUser, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id)
-      .select('-password')
-
-    if (!user || !user.isActive) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: user
-    });
-  } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
@@ -57,7 +21,7 @@ router.post('/', [
   requireAdmin,
   body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['admin', 'vendor']).withMessage('Invalid role'),
+  body('role').isIn(['admin', 'vendor', 'client']).withMessage('Invalid role'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -105,8 +69,9 @@ router.post('/', [
 // Update user
 router.put('/:id', [
   authenticateUser,
+  requireAdmin,
   body('username').optional().trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
-  body('role').optional().isIn(['admin', 'vendor']).withMessage('Invalid role'),
+  body('role').optional().isIn(['admin', 'vendor', 'client']).withMessage('Invalid role'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -174,25 +139,15 @@ router.delete('/:id', authenticateUser, requireAdmin, async (req, res) => {
       req.params.id,
       { isActive: false },
       { new: true }
-    );
+    ).select('-password');
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    res.json({
-      success: true,
-      message: 'User deleted successfully'
-    });
+    res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Delete user error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 

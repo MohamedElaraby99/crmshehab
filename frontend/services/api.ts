@@ -1,6 +1,16 @@
 import { User, Order, Product, Vendor, ProductPurchase } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4031/api';
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4031/api';
+
+// Return the server origin (without the trailing /api) for building asset URLs
+export const getApiOrigin = (): string => {
+  const explicitOrigin = (import.meta as any).env?.VITE_API_ORIGIN as string | undefined;
+  if (explicitOrigin) return explicitOrigin.replace(/\/$/, '');
+  let base = API_BASE_URL;
+  // Strip a trailing "/api" or "/api/"
+  base = base.replace(/\/api\/?$/, '');
+  return base.replace(/\/$/, '');
+};
 
 // Helper function to get auth token
 const getAuthToken = (): string | null => {
@@ -22,18 +32,17 @@ export const isAuthenticated = (): boolean => {
 };
 
 // Helper function to check if token is expired
-const isTokenExpired = (token: string): boolean => {
+const isTokenExpired = (token: string) => {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const currentTime = Date.now() / 1000;
-    return payload.exp < currentTime;
-  } catch (error) {
-    return true; // If we can't parse the token, consider it expired
+    const payload = JSON.parse(atob(token.split('.')[1] || ''));
+    const now = Math.floor(Date.now() / 1000);
+    return payload.exp && now >= payload.exp;
+  } catch {
+    return false;
   }
 };
 
-// Helper function to clear authentication data
-const clearAuth = (): void => {
+const clearAuth = () => {
   localStorage.removeItem('authToken');
   localStorage.removeItem('user');
 };
@@ -114,7 +123,7 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<
 };
 
 // Authentication functions
-export const authenticateUser = async (username: string, password: string): Promise<User | null> => {
+export const authenticateUser = async (username: string, password: string) => {
   try {
     const response = await apiRequestUnauth('/auth/login', {
       method: 'POST',
@@ -132,13 +141,12 @@ export const authenticateUser = async (username: string, password: string): Prom
   }
 };
 
-export const authenticateVendor = async (username: string, password: string): Promise<Vendor | null> => {
+export const authenticateVendor = async (username: string, password: string) => {
   try {
     const response = await apiRequestUnauth('/auth/vendor-login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     });
-
     if (response.success && response.data.token) {
       localStorage.setItem('authToken', response.data.token);
       return response.data.vendor;
@@ -171,6 +179,54 @@ export const getCurrentVendor = async (): Promise<Vendor | null> => {
   }
 };
 
+// Admin: Users API
+export const getAllUsers = async (): Promise<User[]> => {
+  try {
+    const response = await apiRequest('/users');
+    return response?.success ? response.data : [];
+  } catch (error) {
+    console.error('Get users failed:', error);
+    return [];
+  }
+};
+
+export const createUser = async (payload: { username: string; password: string; role: 'admin' | 'vendor' | 'client'; }): Promise<User | null> => {
+  try {
+    const response = await apiRequest('/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return response?.success ? response.data : null;
+  } catch (error) {
+    console.error('Create user failed:', error);
+    return null;
+  }
+};
+
+export const updateUser = async (id: string, updates: Partial<{ username: string; role: 'admin' | 'vendor' | 'client'; isActive: boolean; }>): Promise<User | null> => {
+  try {
+    const response = await apiRequest(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    return response?.success ? response.data : null;
+  } catch (error) {
+    console.error('Update user failed:', error);
+    return null;
+  }
+};
+
+export const deleteUser = async (id: string): Promise<boolean> => {
+  try {
+    const response = await apiRequest(`/users/${id}`, {
+      method: 'DELETE',
+    });
+    return !!response?.success;
+  } catch (error) {
+    console.error('Delete user failed:', error);
+    return false;
+  }
+};
 
 // Vendor functions
 export const getAllVendors = async (): Promise<Vendor[]> => {
@@ -228,7 +284,7 @@ export const updateVendorByVendor = async (id: string, updates: Partial<Vendor>)
     });
     return response.success ? response.data : null;
   } catch (error) {
-    console.error('Update vendor profile failed:', error);
+    console.error('Vendor self-update failed:', error);
     return null;
   }
 };
@@ -370,10 +426,19 @@ export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updat
 
 export const updateOrder = async (id: string, updates: Partial<Order>): Promise<Order | null> => {
   try {
+    console.log('API: updateOrder called with id:', id);
+    console.log('API: updates object:', updates);
+    console.log('API: updates type:', typeof updates);
+    console.log('API: updates keys:', Object.keys(updates || {}));
+    console.log('API: priceApprovalStatus in updates:', updates.priceApprovalStatus);
+    console.log('API: JSON.stringify(updates):', JSON.stringify(updates));
+    
     const response = await apiRequest(`/orders/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    console.log('API: updateOrder response:', response);
+    console.log('API: Response data priceApprovalStatus:', response.data?.priceApprovalStatus);
     return response.success ? response.data : null;
   } catch (error) {
     console.error('Update order failed:', error);
@@ -393,6 +458,35 @@ export const deleteOrder = async (id: string): Promise<boolean> => {
   }
 };
 
+// Upload order item image
+export const uploadOrderImage = async (id: string, file: File): Promise<Order | null> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    const url = `${API_BASE_URL}/orders/${id}/image`;
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.success ? data.data : null;
+  } catch (error) {
+    console.error('Upload order image failed:', error);
+    return null;
+  }
+};
+
 // Product Purchase functions
 export const getProductPurchases = async (productId: string): Promise<ProductPurchase[]> => {
   try {
@@ -401,6 +495,19 @@ export const getProductPurchases = async (productId: string): Promise<ProductPur
   } catch (error) {
     console.error('Get product purchases failed:', error);
     return [];
+  }
+};
+
+export const createDemand = async (productId: string, quantity: number = 1, notes?: string): Promise<boolean> => {
+  try {
+    const response = await apiRequest('/demands', {
+      method: 'POST',
+      body: JSON.stringify({ productId, quantity, notes })
+    });
+    return !!response?.success;
+  } catch (error) {
+    console.error('Create demand failed:', error);
+    return false;
   }
 };
 

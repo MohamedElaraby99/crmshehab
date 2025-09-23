@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Product, ProductPurchase } from '../types';
-import { getAllProducts, createProduct, updateProduct, deleteProduct, getProductPurchaseStats } from '../services/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Product, ProductPurchase, User } from '../types';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct } from '../services/api';
+import { createDemand } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
 interface ProductsPageProps {
@@ -15,16 +16,107 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProductHistory, setSelectedProductHistory] = useState<{product: Product, purchases: ProductPurchase[]} | null>(null);
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [productImageMap, setProductImageMap] = useState<Record<string, string>>({});
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cartItems, setCartItems] = useState<Array<{ id: string; name: string; itemNumber: string; price: number; quantity: number }>>([]);
+
+  const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
+  const userIsClient = useMemo(() => (currentUser?.role === 'client'), [currentUser]);
 
   useEffect(() => {
-    fetchData();
+    const init = async () => {
+      try {
+        const user = await getCurrentUser();
+        setCurrentUser(user);
+      } catch {}
+      // Restore cart
+      try {
+        const saved = localStorage.getItem('clientCart');
+        if (saved) setCartItems(JSON.parse(saved));
+      } catch {}
+      fetchData();
+    };
+    init();
   }, []);
+
+  const persistCart = (items: typeof cartItems) => {
+    setCartItems(items);
+    try { localStorage.setItem('clientCart', JSON.stringify(items)); } catch {}
+  };
+
+  const addToCart = (p: Product) => {
+    const price = typeof (p as any).sellingPrice === 'number' ? (p as any).sellingPrice as number : 0;
+    const existing = cartItems.find(ci => ci.id === p.id);
+    if (existing) {
+      const updated = cartItems.map(ci => ci.id === p.id ? { ...ci, quantity: ci.quantity + 1 } : ci);
+      persistCart(updated);
+    } else {
+      const item = { id: p.id, name: p.name, itemNumber: p.itemNumber, price, quantity: 1 };
+      persistCart([...cartItems, item]);
+    }
+  };
+
+  const raiseDemand = async (p: Product) => {
+    try {
+      const ok = await createDemand(p.id, 1);
+      if (ok) {
+        alert('Demand sent. We will contact you.');
+      } else {
+        alert('Failed to send demand.');
+      }
+    } catch {
+      alert('Failed to send demand.');
+    }
+  };
+
+  const removeFromCart = (id: string) => {
+    persistCart(cartItems.filter(ci => ci.id !== id));
+  };
+
+  const changeQty = (id: string, qty: number) => {
+    if (qty <= 0) return removeFromCart(id);
+    persistCart(cartItems.map(ci => ci.id === id ? { ...ci, quantity: qty } : ci));
+  };
+
+  const submitDemandFromCart = async () => {
+    if (cartItems.length === 0) {
+      setCartOpen(false);
+      return;
+    }
+    try {
+      await Promise.all(cartItems.map(ci => createDemand(ci.id, ci.quantity)));
+      alert('Demand sent for your cart items. We will contact you.');
+      persistCart([]);
+      setCartOpen(false);
+    } catch (e) {
+      alert('Failed to send demand. Please try again.');
+    }
+  };
+
+  const cartCount = cartItems.reduce((s, ci) => s + ci.quantity, 0);
+  const cartTotal = cartItems.reduce((s, ci) => s + ci.quantity * ci.price, 0);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const allProducts = await getAllProducts();
+      const [allProducts, allOrders] = await Promise.all([
+        getAllProducts(),
+        getAllOrders()
+      ]);
       setProducts(allProducts);
+
+      const imgMap: Record<string, string> = {};
+      (allOrders || []).forEach((order: any) => {
+        if (!order?.itemImageUrl || !order?.items) return;
+        order.items.forEach((it: any) => {
+          const pid = it?.productId?.id;
+          if (pid && !imgMap[pid]) {
+            imgMap[pid] = order.itemImageUrl;
+          }
+        });
+      });
+      setProductImageMap(imgMap);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -34,7 +126,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
 
   const handleCreateProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const created = await createProduct(productData);
+      const created = await createProduct(productData as any);
       if (created) {
         await fetchData();
         setShowModal(false);
@@ -58,15 +150,38 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      try {
-        const deleted = await deleteProduct(id);
-        if (deleted) {
-          await fetchData();
-        }
-      } catch (error) {
-        console.error('Failed to delete product:', error);
+    try {
+      const ok = await deleteProduct(id);
+      if (ok) {
+        await fetchData();
       }
+    } catch (error) {
+      console.error('Failed to delete product:', error);
+    }
+  };
+
+  const filteredProducts = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter((p) =>
+      p.name.toLowerCase().includes(term) ||
+      p.itemNumber.toLowerCase().includes(term) ||
+      p.description.toLowerCase().includes(term)
+    );
+  }, [products, searchTerm]);
+
+  const getProductPurchaseStatsSync = (productId: string) => {
+    return { totalPurchases: 0, uniqueVendors: 0, totalQuantity: 0, totalAmount: 0 };
+  };
+
+  const handleViewHistory = async (product: Product) => {
+    if (userIsClient) return; // clients cannot view history
+    try {
+      const purchasesArr = await getProductPurchases(product.id);
+      const purchases = Array.isArray(purchasesArr) ? purchasesArr : [];
+      setSelectedProductHistory({ product, purchases });
+    } catch (e) {
+      console.error('Failed to load history', e);
     }
   };
 
@@ -75,260 +190,299 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
     setShowModal(true);
   };
 
-  const handleViewHistory = async (product: Product) => {
-    try {
-      const stats = await getProductPurchaseStats(product.id);
-      setSelectedProductHistory({
-        product,
-        purchases: stats.purchases
-      });
-    } catch (error) {
-      console.error('Failed to fetch product history:', error);
-    }
-  };
-
-  // Helper function to calculate product purchase stats synchronously
-  const getProductPurchaseStatsSync = (productId: string) => {
-    // For now, return default stats since we don't have purchase data loaded
-    // In a real implementation, you would load product purchases and calculate from that
-    return {
-      totalPurchases: 0,
-      totalQuantity: 0,
-      totalAmount: 0,
-      averagePrice: 0,
-      uniqueVendors: 0,
-      lastPurchase: null,
-      purchases: []
-    };
-  };
-
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.itemNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
-  });
-
-  if (loading) {
-    return <div className="p-8 text-center">Loading products...</div>;
-  }
-
   return (
-    <div>
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Products Catalog</h1>
-            <p className="mt-2 text-gray-600">Manage your product inventory and catalog</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            {/* View Toggle */}
-            <div className="flex rounded-md shadow-sm">
-              <button
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-2 text-sm font-medium rounded-l-md border ${
-                  viewMode === 'table'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                📋 Table
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-2 text-sm font-medium rounded-r-md border-t border-r border-b ${
-                  viewMode === 'grid'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                🔲 Grid
-              </button>
-            </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">Products</h2>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setViewMode(viewMode === 'table' ? 'grid' : 'table')}
+            className="px-3 py-2 text-sm font-medium rounded-md bg-gray-100 hover:bg-gray-200"
+          >
+            {viewMode === 'table' ? 'Grid View' : 'Table View'}
+          </button>
+          {userIsAdmin && (
             <button
               onClick={() => setShowModal(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-3 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700"
             >
               Add Product
             </button>
-          </div>
+          )}
+          {userIsClient && (
+            <button
+              onClick={() => setCartOpen(true)}
+              className="px-3 py-2 text-sm font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 inline-flex items-center"
+              title="View Cart"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3a1 1 0 000 2h1l1.2 6A2 2 0 007.18 13h6.64a2 2 0 001.98-1.6l1-5A1 1 0 0015.82 5H6.2l-.2-1A2 2 0 004.05 2H3z"/><path d="M7 16a2 2 0 11-4 0 2 2 0 014 0zm10 2a2 2 0 10-4 0 2 2 0 004 0z"/></svg>
+              Cart ({cartCount}) - ${cartTotal.toFixed(2)}
+            </button>
+          )}
         </div>
-        {/* Filters */}
-        <div className="mb-6 bg-white p-4 rounded-lg shadow">
-          <div>
-            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-              Search Products
-            </label>
-            <input
-              type="text"
-              id="search"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name, item number, or description..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        </div>
+      </div>
 
-        {/* Products Display */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-              Products ({filteredProducts.length})
-            </h3>
-            
-            {viewMode === 'table' ? (
-              /* Table View */
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
+      {/* Search */}
+      <div className="mb-6">
+        <label htmlFor="search" className="block text-sm font-medium text-gray-700">Search</label>
+        <div className="mt-1">
+          <input
+            type="text"
+            id="search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name, item number, or description..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+      </div>
+
+      {/* Products Display */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+            Products ({filteredProducts.length})
+          </h3>
+          {viewMode === 'table' ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Product
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Item Number
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Selling Price
+                    </th>
+                    {!userIsClient && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Product
+                        History
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Item Number
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredProducts.map((product) => {
-                      const stats = getProductPurchaseStatsSync(product.id);
-                      return (
-                        <tr key={product.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
+                    )}
+                    {userIsAdmin && (
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Stock
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </>
+                    )}
+                    {userIsClient && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Add</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredProducts.map((product) => {
+                    const stats = getProductPurchaseStatsSync(product.id);
+                    return (
+                      <tr key={product.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              {productImageMap[product.id] ? (
+                                <img
+                                  src={`${getApiOrigin()}${productImageMap[product.id]}`}
+                                  alt={product.name}
+                                  className="h-10 w-10 rounded object-cover border"
+                                />
+                              ) : (
                                 <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
                                   <span className="text-lg">📦</span>
                                 </div>
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                                <div className="text-sm text-gray-500 max-w-xs truncate">{product.description}</div>
-                              </div>
+                              )}
                             </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                              <div className="text-sm text-gray-500 max-w-xs truncate">{product.description}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900 font-mono">{product.itemNumber}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{typeof (product as any).sellingPrice === 'number' ? `$${(product as any).sellingPrice.toFixed(2)}` : '-'}</div>
+                        </td>
+                        {!userIsClient && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button
+                              onClick={() => handleViewHistory(product)}
+                              className="text-green-600 hover:text-green-900"
+                              title="View Purchase History"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 5a1 1 0 112 0v4a1 1 0 01-.293.707l-2 2a1 1 0 11-1.414-1.414L9 8.586V5z" />
+                              </svg>
+                            </button>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900 font-mono">{product.itemNumber}</div>
-                          </td>
+                        )}
+                        {userIsAdmin && (
+                          <>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{typeof (product as any).stock === 'number' ? (product as any).stock : 0}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => handleEditProduct(product)}
+                                  className="text-blue-600 hover:text-blue-900"
+                                  title="Edit Product"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-8.95 8.95a1 1 0 01-.464.263l-3 0.75a1 1 0 01-1.213-1.213l.75-3a1 1 0 01.263-.464l8.95-8.95z" />
+                                    <path d="M5 13l2 2" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteProduct(product.id)}
+                                  className="text-red-600 hover:text-red-900"
+                                  title="Delete Product"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                        {userIsClient && (
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">
                               <button
-                                onClick={() => handleViewHistory(product)}
-                                className="text-green-600 hover:text-green-900"
-                                title="View Purchase History"
+                                onClick={() => addToCart(product)}
+                                className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                                title="Add to Cart"
                               >
-                                📊
+                                Add to Cart
                               </button>
                               <button
-                                onClick={() => handleEditProduct(product)}
-                                className="text-blue-600 hover:text-blue-900"
-                                title="Edit Product"
+                                onClick={() => raiseDemand(product)}
+                                className="px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                                title="Send Demand"
                               >
-                                ✏️
-                              </button>
-                              <button
-                                onClick={() => handleDeleteProduct(product.id)}
-                                className="text-red-600 hover:text-red-900"
-                                title="Delete Product"
-                              >
-                                🗑️
+                                Demand
                               </button>
                             </div>
                           </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              /* Grid View */
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredProducts.map((product) => {
-                  const stats = getProductPurchaseStatsSync(product.id);
-                  return (
-                    <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex items-center space-x-3">
-                          <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-2xl">📦</span>
-                          </div>
-                          <div>
-                            <h4 className="text-lg font-semibold text-gray-900">{product.name}</h4>
-                            <p className="text-sm text-gray-500 font-mono">{product.itemNumber}</p>
-                          </div>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* Grid View */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredProducts.map((product) => {
+                const stats = getProductPurchaseStatsSync(product.id);
+                return (
+                  <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="h-12 w-12">
+                          {productImageMap[product.id] ? (
+                            <img
+                              src={`${getApiOrigin()}${productImageMap[product.id]}`}
+                              alt={product.name}
+                              className="h-12 w-12 rounded object-cover border"
+                            />
+                          ) : (
+                            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-2xl">📦</span>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-900">{product.name}</h4>
+                          <p className="text-sm text-gray-500 font-mono">{product.itemNumber}</p>
                         </div>
                       </div>
-                      
-                      
-                      {/* Purchase History Summary */}
-                      {stats.totalPurchases > 0 && (
-                        <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                          <div className="text-xs font-medium text-gray-600 mb-2">Purchase History</div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-gray-500">Purchases:</span> {stats.totalPurchases}
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Vendors:</span> {stats.uniqueVendors}
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Total Qty:</span> {stats.totalQuantity}
-                            </div>
-                            <div>
-                              <span className="text-gray-500">Total Spent:</span> ${stats.totalAmount.toFixed(0)}
-                            </div>
-                          </div>
-                      
-                        </div>
-                      )}
-                      
-                      <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description}</p>
-                      
-                      <div className="flex justify-between items-center">
-                        <button
-                          onClick={() => handleViewHistory(product)}
-                          className="text-green-600 hover:text-green-900 text-sm font-medium"
-                        >
-                          📊 History
-                        </button>
+                      <div className="text-right">
+                        <div className="text-sm text-gray-500">Selling Price</div>
+                        <div className="text-base font-semibold text-gray-900">{typeof (product as any).sellingPrice === 'number' ? `$${(product as any).sellingPrice.toFixed(2)}` : '-'}</div>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description}</p>
+
+                    <div className="flex justify-between items-center">
+                      <button
+                        onClick={() => handleViewHistory(product)}
+                        className="text-green-600 hover:text-green-900 text-sm font-medium"
+                        title="View Purchase History"
+                      >
+                        <span className="inline-flex items-center">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 5a1 1 0 112 0v4a1 1 0 01-.293.707l-2 2a1 1 0 11-1.414-1.414L9 8.586V5z" />
+                          </svg>
+                          History
+                        </span>
+                      </button>
+                      {userIsAdmin ? (
                         <div className="flex space-x-2">
                           <button
                             onClick={() => handleEditProduct(product)}
                             className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                            title="Edit Product"
                           >
-                            ✏️ Edit
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M13.586 3.586a2 2 0 112.828 2.828l-8.95 8.95a1 1 0 01-.464.263l-3 0.75a1 1 0 01-1.213-1.213l.75-3a1 1 0 01.263-.464l8.95-8.95z" />
+                              <path d="M5 13l2 2" />
+                            </svg>
                           </button>
                           <button
                             onClick={() => handleDeleteProduct(product.id)}
                             className="text-red-600 hover:text-red-900 text-sm font-medium"
+                            title="Delete Product"
                           >
-                            🗑️ Delete
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />
+                            </svg>
                           </button>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => addToCart(product)}
+                            className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                            title="Add to Cart"
+                          >
+                            Add to Cart
+                          </button>
+                          <button
+                            onClick={() => raiseDemand(product)}
+                            className="px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                            title="Send Demand"
+                          >
+                            Demand
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-            
-            {filteredProducts.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No products found matching your criteria.
-              </div>
-            )}
-          </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {filteredProducts.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              No products found matching your criteria.
+            </div>
+          )}
         </div>
       </div>
 
       {/* Product Modal */}
-      {showModal && (
+      {userIsAdmin && showModal && (
         <ProductModal
           product={editingProduct}
           onSave={editingProduct ? handleUpdateProduct : handleCreateProduct}
@@ -339,10 +493,57 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
         />
       )}
 
+      {/* Cart Modal for client */}
+      {userIsClient && cartOpen && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white w-full max-w-lg rounded shadow-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Your Cart</h3>
+              <button onClick={() => setCartOpen(false)} className="text-gray-600 hover:text-gray-800">✕</button>
+            </div>
+            {cartItems.length === 0 ? (
+              <div className="text-gray-500">Cart is empty.</div>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {cartItems.map(ci => (
+                  <div key={ci.id} className="flex items-center justify-between border rounded p-2">
+                    <div>
+                      <div className="font-medium text-gray-900">{ci.name}</div>
+                      <div className="text-xs text-gray-500">Item #{ci.itemNumber}</div>
+                      <div className="text-sm text-gray-700">${ci.price.toFixed(2)}</div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="number"
+                        min={1}
+                        value={ci.quantity}
+                        onChange={(e) => changeQty(ci.id, parseInt(e.target.value || '1', 10))}
+                        className="w-16 border rounded px-2 py-1"
+                      />
+                      <button onClick={() => removeFromCart(ci.id)} className="text-red-600 hover:text-red-800" title="Remove">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-gray-700">Total items: {cartCount}</div>
+              <div className="text-lg font-semibold text-gray-900">Total: ${cartTotal.toFixed(2)}</div>
+            </div>
+            <div className="mt-4 text-right">
+              <button onClick={() => setCartOpen(false)} className="px-4 py-2 rounded border mr-2">Close</button>
+              <button onClick={submitDemandFromCart} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">Send Demand</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Product History Modal */}
       {selectedProductHistory && (
         <ProductHistoryModal
-          productId={selectedProductHistory.product.id}
+          productId={(selectedProductHistory.product as any).id}
           productName={selectedProductHistory.product.name}
           purchases={selectedProductHistory.purchases}
           onClose={() => setSelectedProductHistory(null)}
@@ -363,32 +564,33 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
   const [formData, setFormData] = useState({
     itemNumber: product?.itemNumber || '',
     name: product?.name || '',
-    description: product?.description || ''
+    description: product?.description || '',
+    sellingPrice: (product as any)?.sellingPrice as number | undefined ?? undefined,
+    stock: (product as any)?.stock as number | undefined ?? undefined,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Only send the fields we want, regardless of what's in the existing product
-    const productData = {
+    const productData: any = {
       itemNumber: formData.itemNumber,
       name: formData.name,
-      description: formData.description
+      description: formData.description,
     };
-    
-    // If editing, include the ID
+    if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
+      productData.sellingPrice = formData.sellingPrice;
+    }
     if (product) {
       productData.id = product.id;
     }
-    
-    console.log('ProductModal: Sending product data:', productData);
     onSave(productData);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value
-    });
+    const { name, value, type } = e.target as HTMLInputElement;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value
+    }));
   };
 
   return (
@@ -402,49 +604,57 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
             <div>
               <label className="block text-sm font-medium text-gray-700">Item Number</label>
               <input
-                type="text"
                 name="itemNumber"
+                className="mt-1 block w-full border rounded px-3 py-2"
                 value={formData.itemNumber}
                 onChange={handleChange}
-                required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Product Name</label>
+              <label className="block text-sm font-medium text-gray-700">Name</label>
               <input
-                type="text"
                 name="name"
+                className="mt-1 block w-full border rounded px-3 py-2"
                 value={formData.name}
                 onChange={handleChange}
-                required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Description</label>
               <textarea
                 name="description"
+                className="mt-1 block w-full border rounded px-3 py-2"
                 value={formData.description}
                 onChange={handleChange}
-                rows={3}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div className="flex justify-end space-x-3 pt-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                {product ? 'Update' : 'Create'}
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Selling Price</label>
+              <input
+                name="sellingPrice"
+                type="number"
+                step="0.01"
+                min="0"
+                className="mt-1 block w-full border rounded px-3 py-2"
+                value={typeof formData.sellingPrice === 'number' ? String(formData.sellingPrice) : ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Stock</label>
+              <input
+                name="stock"
+                type="number"
+                step="1"
+                min="0"
+                className="mt-1 block w-full border rounded px-3 py-2"
+                value={typeof formData.stock === 'number' ? String(formData.stock) : ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="flex justify-end space-x-2 pt-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded border">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white">Save</button>
             </div>
           </form>
         </div>

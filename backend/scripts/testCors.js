@@ -2,7 +2,7 @@ const axios = require('axios');
 require('dotenv').config();
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:4031/api';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://crm.fikra.solutions';
+// const FRONTEND_URL = process.env.FRONTEND_URL || 'https://crm.fikra.solutions';
 
 async function testCorsConfiguration() {
   console.log('🧪 Testing CORS Configuration...\n');

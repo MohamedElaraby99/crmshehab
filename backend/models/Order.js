@@ -94,10 +94,10 @@ const orderSchema = new mongoose.Schema({
   },
   shippingAddress: {
     street: { type: String, trim: true, maxlength: 200 },
-    city: { type: String, trim: true, maxlength: 50 },
-    state: { type: String, trim: true, maxlength: 50 },
+    city: { type: String, trim: true, maxlength: 100 },
+    state: { type: String, trim: true, maxlength: 100 },
     zipCode: { type: String, trim: true, maxlength: 20 },
-    country: { type: String, trim: true, maxlength: 50 }
+    country: { type: String, trim: true, maxlength: 100 }
   },
   notes: {
     type: String,
@@ -109,14 +109,22 @@ const orderSchema = new mongoose.Schema({
     default: Date.now
   },
   expectedDeliveryDate: {
-    type: Date
+    type: String,
+    trim: true,
+    maxlength: 100
   },
   actualDeliveryDate: {
-    type: Date
+    type: String,
+    trim: true,
+    maxlength: 100
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  stockAdjusted: {
+    type: Boolean,
+    default: false
   },
   createdAt: {
     type: Date,
@@ -128,7 +136,6 @@ const orderSchema = new mongoose.Schema({
   }
 });
 
-// Update updatedAt field
 orderSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();

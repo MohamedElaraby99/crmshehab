@@ -28,6 +28,18 @@ const productSchema = new mongoose.Schema({
     type: Map,
     of: String
   },
+  sellingPrice: {
+    type: Number,
+    required: false,
+    min: 0,
+    default: undefined
+  },
+  stock: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0
+  },
   isActive: {
     type: Boolean,
     default: true

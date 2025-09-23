@@ -102,7 +102,7 @@ const authenticateUserOrVendor = async (req, res, next) => {
         });
       }
       req.user = user;
-      req.userType = 'user';
+      req.userType = user.role; // Set userType based on user's role (admin or vendor)
     }
     // Check if it's a vendor token
     else if (decoded.vendorId) {

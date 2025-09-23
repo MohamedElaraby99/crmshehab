@@ -1,5 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Vendor = require('../models/Vendor');
 const ProductPurchase = require('../models/ProductPurchase');
@@ -7,6 +8,29 @@ const Order = require('../models/Order');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Helper to compute stock from confirmed orders (without mutating DB)
+const computeStockFromConfirmed = async (productId) => {
+  const pid = String(productId);
+  const orders = await Order.find({ status: 'confirmed', isActive: true }, { items: 1 });
+  let total = 0;
+  orders.forEach(o => {
+    (o.items || []).forEach(it => {
+      const itPid = (it.productId && it.productId._id) ? String(it.productId._id) : String(it.productId);
+      if (itPid === pid) total += it.quantity || 0;
+    });
+  });
+  return total;
+};
+
+// Helper to normalize product JSON (ensure stock is always present)
+const normalizeProduct = (doc) => {
+  const obj = typeof doc.toJSON === 'function' ? doc.toJSON() : doc;
+  return {
+    ...obj,
+    stock: typeof obj.stock === 'number' ? obj.stock : 0,
+  };
+};
 
 // Get all products
 router.get('/', authenticateUser, async (req, res) => {
@@ -39,9 +63,18 @@ router.get('/', authenticateUser, async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
+    // Normalize and backfill stock if zero
+    const normalized = await Promise.all(products.map(async (p) => {
+      const obj = normalizeProduct(p);
+      if (!obj.stock || obj.stock === 0) {
+        obj.stock = await computeStockFromConfirmed(obj.id);
+      }
+      return obj;
+    }));
+
     res.json({
       success: true,
-      data: products,
+      data: normalized,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -69,9 +102,14 @@ router.get('/:id', authenticateUser, async (req, res) => {
       });
     }
 
+    const obj = normalizeProduct(product);
+    if (!obj.stock || obj.stock === 0) {
+      obj.stock = await computeStockFromConfirmed(obj.id);
+    }
+
     res.json({
       success: true,
-      data: product
+      data: obj
     });
   } catch (error) {
     console.error('Get product error:', error);
@@ -85,14 +123,65 @@ router.get('/:id', authenticateUser, async (req, res) => {
 // Get product purchase history
 router.get('/:id/purchases', authenticateUser, async (req, res) => {
   try {
-    const purchases = await ProductPurchase.find({ 
-      productId: req.params.id,
+    const productId = req.params.id;
+    let purchases = await ProductPurchase.find({ 
+      productId,
       isActive: true 
     })
       .populate('orderId', 'orderNumber')
       .sort({ purchaseDate: -1 });
 
-    // Calculate statistics
+    // If no saved purchase records, fall back to confirmed orders to build history (non-persistent)
+    if (!purchases || purchases.length === 0) {
+      const pid = String(req.params.id);
+      const orders = await Order.find({ 
+        status: 'confirmed',
+        isActive: true 
+      })
+      .populate('vendorId', 'name')
+      .populate('items.productId', 'name');
+
+      const computed = [];
+      orders.forEach(order => {
+        (order.items || []).forEach(productItem => {
+          const itemPid = (productItem.productId && productItem.productId._id) ? String(productItem.productId._id) : String(productItem.productId);
+          if (itemPid === pid) {
+            computed.push({
+              id: `${order._id}_${productItem._id}`,
+              productId: pid,
+              vendorId: typeof order.vendorId === 'string' ? order.vendorId : order.vendorId._id,
+              vendorName: typeof order.vendorId === 'string' ? 'Unknown' : order.vendorId.name,
+              quantity: productItem.quantity,
+              price: productItem.unitPrice || 0,
+              totalAmount: productItem.totalPrice || (productItem.unitPrice || 0) * (productItem.quantity || 0),
+              purchaseDate: order.orderDate,
+              orderId: order._id,
+              notes: order.notes || ''
+            });
+          }
+        });
+      });
+
+      // Sort newest first to match saved behavior
+      computed.sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate));
+
+      return res.json({
+        success: true,
+        data: {
+          purchases: computed,
+          statistics: {
+            totalPurchases: computed.length,
+            totalQuantity: computed.reduce((sum, p) => sum + (p.quantity || 0), 0),
+            totalAmount: computed.reduce((sum, p) => sum + (p.totalAmount || 0), 0),
+            averagePrice: (computed.reduce((sum, p) => sum + (p.totalAmount || 0), 0)) / (computed.reduce((sum, p) => sum + (p.quantity || 0), 0) || 1),
+            uniqueVendors: [...new Set(computed.map(p => (p.vendorId || '').toString()))].length,
+            lastPurchase: computed[0] || null
+          }
+        }
+      });
+    }
+
+    // Saved purchases path
     const totalQuantity = purchases.reduce((sum, p) => sum + p.quantity, 0);
     const totalAmount = purchases.reduce((sum, p) => sum + p.totalAmount, 0);
     const averagePrice = totalQuantity > 0 ? totalAmount / totalQuantity : 0;
@@ -128,7 +217,9 @@ router.post('/', [
   requireAdmin,
   body('itemNumber').trim().isLength({ min: 1 }).withMessage('Item number is required'),
   body('name').trim().isLength({ min: 1 }).withMessage('Name is required'),
-  body('description').trim().isLength({ min: 1 }).withMessage('Description is required')
+  body('description').trim().isLength({ min: 1 }).withMessage('Description is required'),
+  body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
+  body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0')
 ], async (req, res) => {
   try {
     console.log('Create product - received body:', req.body);
@@ -143,7 +234,7 @@ router.post('/', [
       });
     }
 
-    const { itemNumber, name, description, specifications } = req.body;
+    const { itemNumber, name, description, specifications, sellingPrice, stock } = req.body;
 
     // Check if item number already exists
     const existingProduct = await Product.findOne({ itemNumber });
@@ -158,7 +249,9 @@ router.post('/', [
       itemNumber,
       name,
       description,
-      specifications: specifications || {}
+      specifications: specifications || {},
+      ...(typeof sellingPrice !== 'undefined' ? { sellingPrice } : {}),
+      ...(typeof stock !== 'undefined' ? { stock } : {})
     });
 
     await product.save();
@@ -166,7 +259,7 @@ router.post('/', [
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
-      data: product
+      data: normalizeProduct(product)
     });
   } catch (error) {
     console.error('Create product error:', error);
@@ -182,7 +275,9 @@ router.put('/:id', [
   authenticateUser,
   requireAdmin,
   body('name').optional().trim().isLength({ min: 1 }).withMessage('Name cannot be empty'),
-  body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty')
+  body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty'),
+  body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
+  body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -219,10 +314,15 @@ router.put('/:id', [
       { new: true, runValidators: true }
     );
 
+    const obj = normalizeProduct(updatedProduct);
+    if (!obj.stock || obj.stock === 0) {
+      obj.stock = await computeStockFromConfirmed(obj.id);
+    }
+
     res.json({
       success: true,
       message: 'Product updated successfully',
-      data: updatedProduct
+      data: obj
     });
   } catch (error) {
     console.error('Update product error:', error);

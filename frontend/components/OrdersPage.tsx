@@ -79,20 +79,38 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
     }
   };
 
-  const handleUpdateOrder = async (orderData: Order) => {
+  const handleUpdateOrder = async (orderData: Order | Partial<Order>) => {
     try {
       console.log('OrdersPage: handleUpdateOrder received orderData:', orderData);
-      console.log('OrdersPage: orderData.id:', orderData.id);
       
-      if (!orderData.id) {
+      const orderId = (orderData as any).id;
+      if (!orderId) {
         console.error('OrdersPage: No order ID provided for update');
         return;
       }
       
+      // If this is a partial update (like priceApprovalStatus only), send it directly
+      if (Object.keys(orderData).length === 2 && 'id' in orderData && 'priceApprovalStatus' in orderData) {
+        console.log('OrdersPage: Sending partial update directly:', orderData);
+        const { id, ...updateFields } = orderData as any;
+        const updated = await updateOrder(id, updateFields);
+        
+        // Update local state with the response
+        if (updated) {
+          setOrders(prevOrders => 
+            prevOrders.map(order => 
+              order.id === id ? { ...order, ...updated } : order
+            )
+          );
+        }
+        return;
+      }
+      
+      // For complete order updates (from modal)
       // Optimistic update - update the local state immediately
       setOrders(prevOrders => 
         prevOrders.map(order => 
-          order.id === orderData.id ? orderData : order
+          order.id === orderId ? (orderData as Order) : order
         )
       );
       
@@ -101,7 +119,8 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
       setEditingOrder(null);
       
       // Then make the API call
-      const updated = await updateOrder(orderData.id, orderData);
+      console.log('OrdersPage: Sending complete order to API:', orderData);
+      const updated = await updateOrder(orderId, orderData as Order);
       
       // Only refresh if there was an error (to sync with server state)
     } catch (error) {

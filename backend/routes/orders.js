@@ -1,10 +1,36 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
 const { body, validationResult } = require('express-validator');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const ProductPurchase = require('../models/ProductPurchase');
 const { authenticateUser, authenticateVendor, authenticateUserOrVendor } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Multer storage for order item images
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Save into backend/upload (served at /upload)
+    cb(null, path.join(__dirname, '..', 'upload'));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '');
+    cb(null, `${Date.now()}-${base}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPG, PNG, WEBP allowed'));
+  }
+});
 
 // Get all orders
 router.get('/', authenticateUserOrVendor, async (req, res) => {
@@ -51,47 +77,32 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
       query.status = status;
     }
 
-
     if (vendorId) {
       query.vendorId = vendorId;
-    }
-
-    // If user is a vendor, only show their orders
-    if (req.userType === 'vendor') {
-      query.vendorId = req.vendor._id;
     }
 
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
-    // Handle item count filtering
-    let finalQuery = { ...query };
-    let itemCountFilter = null;
-    
-    if (finalQuery._itemCountFilter) {
-      itemCountFilter = finalQuery._itemCountFilter;
-      delete finalQuery._itemCountFilter;
-    }
-
-    const orders = await Order.find(finalQuery)
-      .populate('vendorId', 'name contactPerson email')
-      .populate('items.productId', 'name itemNumber')
-      .sort(sortOptions);
+    let orders = await Order.find(query)
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .populate([
+        { path: 'vendorId', select: 'name contactPerson email' },
+        { path: 'items.productId', select: 'name itemNumber' }
+      ]);
 
     // Filter by item count if needed
-    let filteredOrders = orders;
-    if (itemCountFilter !== null) {
-      filteredOrders = orders.filter(order => order.items.length === itemCountFilter);
+    if (query._itemCountFilter) {
+      orders = orders.filter(order => order.items.length === query._itemCountFilter);
     }
 
-    // Apply pagination to filtered results
-    const total = filteredOrders.length;
-    const paginatedOrders = filteredOrders
-      .slice((page - 1) * limit, page * limit);
+    const total = await Order.countDocuments({ ...query, _itemCountFilter: undefined });
 
     res.json({
       success: true,
-      data: paginatedOrders,
+      data: orders,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -100,45 +111,7 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
     });
   } catch (error) {
     console.error('Get orders error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Get order by ID
-router.get('/:id', authenticateUserOrVendor, async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id)
-      .populate('vendorId', 'name contactPerson email phone address')
-      .populate('items.productId', 'name itemNumber description');
-
-    if (!order || !order.isActive) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-
-    // If user is a vendor, ensure they can only access their own orders
-    if (req.userType === 'vendor' && order.vendorId.toString() !== req.vendor._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. You can only view your own orders.'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: order
-    });
-  } catch (error) {
-    console.error('Get order error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
@@ -178,7 +151,7 @@ router.post('/', [
         });
       }
 
-    processedItems.push({
+      processedItems.push({
         productId: item.productId,
         itemNumber: product.itemNumber,
         quantity: item.quantity
@@ -202,17 +175,10 @@ router.post('/', [
       { path: 'items.productId', select: 'name itemNumber' }
     ]);
 
-    res.status(201).json({
-      success: true,
-      message: 'Order created successfully',
-      data: order
-    });
+    res.status(201).json({ success: true, data: order });
   } catch (error) {
     console.error('Create order error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
@@ -233,95 +199,91 @@ router.put('/:id', [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors: errors.array()
-      });
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
     }
 
     const order = await Order.findById(req.params.id);
     if (!order || !order.isActive) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
+      return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
     // If user is a vendor, ensure they can only update their own orders
     if (req.userType === 'vendor' && order.vendorId.toString() !== req.vendor._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. You can only update your own orders.'
-      });
+      return res.status(403).json({ success: false, message: 'Access denied. You can only update your own orders.' });
     }
 
+    const previousStatus = order.status;
     const updateData = {};
+
     if (req.body.status) updateData.status = req.body.status;
-    if (req.body.priceApprovalStatus) {
-      // Only admin/user can change priceApprovalStatus, vendors cannot
-      if (req.userType === 'vendor') {
-        return res.status(403).json({
-          success: false,
-          message: 'Vendors are not allowed to update price approval status'
+
+    // Only allow priceApprovalStatus to be changed by admins, not vendors
+    if (req.body.priceApprovalStatus !== undefined) {
+      if (req.userType === 'admin') {
+        updateData.priceApprovalStatus = req.body.priceApprovalStatus;
+      } else {
+        const currentOrder = await Order.findById(req.params.id);
+        if (currentOrder) {
+          updateData.priceApprovalStatus = currentOrder.priceApprovalStatus;
+        }
+      }
+    }
+
+    // Apply updates
+    await Order.findByIdAndUpdate(req.params.id, updateData, { runValidators: true });
+
+    // Adjust stock and create/remove purchase records if needed
+    const newStatus = updateData.status || previousStatus;
+    const isNowConfirmed = newStatus === 'confirmed';
+    const leftConfirmed = previousStatus === 'confirmed' && newStatus !== 'confirmed';
+
+    if (isNowConfirmed && !order.stockAdjusted) {
+      // Increase stock for each item
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: item.quantity } });
+      }
+      // Create purchase records
+      const populatedVendor = await Order.findById(order._id).populate({ path: 'vendorId', select: 'name' });
+      const vendorName = populatedVendor?.vendorId?.name || 'Unknown';
+      const now = new Date();
+      for (const item of order.items) {
+        const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
+        const totalAmount = price * (item.quantity || 0);
+        await ProductPurchase.create({
+          productId: item.productId,
+          vendorId: order.vendorId,
+          vendorName,
+          quantity: item.quantity,
+          price,
+          totalAmount,
+          purchaseDate: now,
+          orderId: order._id,
+          notes: order.notes || ''
         });
       }
-      updateData.priceApprovalStatus = req.body.priceApprovalStatus;
-    }
-    if (req.body.confirmFormShehab !== undefined) updateData.confirmFormShehab = req.body.confirmFormShehab;
-    if (req.body.estimatedDateReady !== undefined) updateData.estimatedDateReady = req.body.estimatedDateReady;
-    if (req.body.invoiceNumber !== undefined) updateData.invoiceNumber = req.body.invoiceNumber;
-    if (req.body.transferAmount !== undefined) updateData.transferAmount = req.body.transferAmount;
-    if (req.body.shippingDateToAgent !== undefined) updateData.shippingDateToAgent = req.body.shippingDateToAgent;
-    if (req.body.shippingDateToSaudi !== undefined) updateData.shippingDateToSaudi = req.body.shippingDateToSaudi;
-    if (req.body.arrivalDate !== undefined) updateData.arrivalDate = req.body.arrivalDate;
-    if (req.body.notes !== undefined) updateData.notes = req.body.notes;
-    if (req.body.expectedDeliveryDate) updateData.expectedDeliveryDate = req.body.expectedDeliveryDate;
-    if (req.body.actualDeliveryDate) updateData.actualDeliveryDate = req.body.actualDeliveryDate;
-
-    // If vendor provided price updates for items, apply carefully
-    if (Array.isArray(req.body.items) && req.body.items.length > 0) {
-      const itemUpdate = req.body.items[0];
-      if (typeof itemUpdate.unitPrice === 'number') {
-        // Update first item's unitPrice and totalPrice, and recompute totalAmount
-        const orderDoc = await Order.findById(req.params.id);
-        if (!orderDoc || !orderDoc.isActive) {
-          return res.status(404).json({ success: false, message: 'Order not found' });
-        }
-        // Vendor cannot change productId or quantity here; only price
-        if (orderDoc.items && orderDoc.items[0]) {
-          const quantity = orderDoc.items[0].quantity || 0;
-          orderDoc.items[0].unitPrice = itemUpdate.unitPrice;
-          orderDoc.items[0].totalPrice = quantity * itemUpdate.unitPrice;
-          // Recompute totalAmount from items
-          orderDoc.totalAmount = orderDoc.items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
-          // Reset approval to pending when vendor changes price
-          orderDoc.priceApprovalStatus = 'pending';
-          await orderDoc.save();
-        }
+      order.stockAdjusted = true;
+      await order.save();
+    } else if (leftConfirmed && order.stockAdjusted) {
+      // Rollback stock for each item
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.quantity } });
       }
+      // Remove purchase records for this order
+      await ProductPurchase.deleteMany({ orderId: order._id });
+      order.stockAdjusted = false;
+      await order.save();
     }
 
-    const updatedOrder = await Order.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate([
+    // Fetch the final updated order
+    const updatedOrder = await Order.findById(req.params.id).populate([
       { path: 'vendorId', select: 'name contactPerson email' },
       { path: 'items.productId', select: 'name itemNumber' }
     ]);
 
-    res.json({
-      success: true,
-      message: 'Order updated successfully',
-      data: updatedOrder
-    });
+    res.json({ success: true, message: 'Order updated successfully', data: updatedOrder });
   } catch (error) {
     console.error('Update order error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
@@ -331,75 +293,38 @@ router.delete('/:id', authenticateUserOrVendor, async (req, res) => {
     const order = await Order.findById(req.params.id);
     
     if (!order || !order.isActive) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
+      return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
     // If user is a vendor, ensure they can only delete their own orders
     if (req.userType === 'vendor' && order.vendorId.toString() !== req.vendor._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. You can only delete your own orders.'
-      });
+      return res.status(403).json({ success: false, message: 'Access denied. You can only delete your own orders.' });
     }
 
-    const deletedOrder = await Order.findByIdAndUpdate(
-      req.params.id,
-      { isActive: false },
-      { new: true }
-    );
+    await Order.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
 
-    res.json({
-      success: true,
-      message: 'Order deleted successfully'
-    });
+    res.json({ success: true, message: 'Order deleted successfully' });
   } catch (error) {
     console.error('Delete order error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
 // Get vendor orders
 router.get('/vendor/:vendorId', authenticateVendor, async (req, res) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
-    const query = { 
-      vendorId: req.params.vendorId,
-      isActive: true 
-    };
-
-    if (status) {
-      query.status = status;
-    }
-
-    const orders = await Order.find(query)
-      .populate('items.productId', 'name itemNumber')
+    const { vendorId } = req.params;
+    const orders = await Order.find({ vendorId, isActive: true })
       .sort({ orderDate: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .populate([
+        { path: 'vendorId', select: 'name contactPerson email' },
+        { path: 'items.productId', select: 'name itemNumber' }
+      ]);
 
-    const total = await Order.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: orders,
-      pagination: {
-        current: parseInt(page),
-        pages: Math.ceil(total / limit),
-        total
-      }
-    });
+    res.json({ success: true, data: orders });
   } catch (error) {
     console.error('Get vendor orders error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
