@@ -25,10 +25,17 @@ const computeStockFromConfirmed = async (productId) => {
 
 // Helper to normalize product JSON (ensure stock is always present)
 const normalizeProduct = (doc) => {
-  const obj = typeof doc.toJSON === 'function' ? doc.toJSON() : doc;
+  const raw = typeof doc?.toJSON === 'function' ? doc.toJSON() : (doc || {});
+  const obj = { ...raw };
+  // Ensure id exists even for lean() results
+  if (!obj.id && obj._id) {
+    obj.id = String(obj._id);
+    delete obj._id;
+  }
   return {
     ...obj,
     stock: typeof obj.stock === 'number' ? obj.stock : 0,
+    visibleToClients: typeof obj.visibleToClients === 'boolean' ? obj.visibleToClients : true,
   };
 };
 
@@ -45,6 +52,13 @@ router.get('/', authenticateUser, async (req, res) => {
 
     const query = { isActive: true };
 
+    // Hide products from any non-admin users if not visibleToClients
+    try {
+      if (!req.user || req.user.role !== 'admin') {
+        query.visibleToClients = true;
+      }
+    } catch {}
+
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -57,9 +71,11 @@ router.get('/', authenticateUser, async (req, res) => {
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
     const products = await Product.find(query)
+      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock visibleToClients')
       .sort(sortOptions)
       .limit(limit * 1)
-      .skip((page - 1) * limit);
+      .skip((page - 1) * limit)
+      .lean();
 
     const total = await Product.countDocuments(query);
 
@@ -72,9 +88,10 @@ router.get('/', authenticateUser, async (req, res) => {
       return obj;
     }));
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       success: true,
-      data: normalized,
+      data: normalized.map(p => normalizeProduct(p)),
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -87,6 +104,104 @@ router.get('/', authenticateUser, async (req, res) => {
       success: false,
       message: 'Internal server error'
     });
+  }
+});
+
+// Public/Client-visible products (separate endpoint)
+router.get('/visible/list', authenticateUser, async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const query = { isActive: true, visibleToClients: true };
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { itemNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const products = await Product.find(query)
+      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock visibleToClients')
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    const total = await Product.countDocuments(query);
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      data: products.map(p => normalizeProduct(p)),
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / limit),
+        total
+      }
+    });
+  } catch (error) {
+    console.error('Get visible products error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Alias: simpler path for visible products
+router.get('/visible', authenticateUser, async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const query = { isActive: true, visibleToClients: true };
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+        { itemNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const products = await Product.find(query)
+      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock visibleToClients')
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    const total = await Product.countDocuments(query);
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      data: products.map(p => normalizeProduct(p)),
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / limit),
+        total
+      }
+    });
+  } catch (error) {
+    console.error('Get visible products (alias) error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
@@ -107,6 +222,7 @@ router.get('/:id', authenticateUser, async (req, res) => {
       obj.stock = await computeStockFromConfirmed(obj.id);
     }
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       success: true,
       data: obj
@@ -219,7 +335,8 @@ router.post('/', [
   body('name').trim().isLength({ min: 1 }).withMessage('Name is required'),
   body('description').trim().isLength({ min: 1 }).withMessage('Description is required'),
   body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
-  body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0')
+  body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0'),
+  body('visibleToClients').optional().isBoolean().withMessage('visibleToClients must be boolean')
 ], async (req, res) => {
   try {
     console.log('Create product - received body:', req.body);
@@ -234,7 +351,7 @@ router.post('/', [
       });
     }
 
-    const { itemNumber, name, description, specifications, sellingPrice, stock } = req.body;
+    const { itemNumber, name, description, specifications, sellingPrice, stock, visibleToClients } = req.body;
 
     // Check if item number already exists
     const existingProduct = await Product.findOne({ itemNumber });
@@ -251,7 +368,8 @@ router.post('/', [
       description,
       specifications: specifications || {},
       ...(typeof sellingPrice !== 'undefined' ? { sellingPrice } : {}),
-      ...(typeof stock !== 'undefined' ? { stock } : {})
+      ...(typeof stock !== 'undefined' ? { stock } : {}),
+      ...(typeof visibleToClients !== 'undefined' ? { visibleToClients } : {})
     });
 
     await product.save();
@@ -277,7 +395,8 @@ router.put('/:id', [
   body('name').optional().trim().isLength({ min: 1 }).withMessage('Name cannot be empty'),
   body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty'),
   body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
-  body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0')
+  body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0'),
+  body('visibleToClients').optional().isBoolean().withMessage('visibleToClients must be boolean')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -318,6 +437,8 @@ router.put('/:id', [
     if (!obj.stock || obj.stock === 0) {
       obj.stock = await computeStockFromConfirmed(obj.id);
     }
+    // Ensure visibleToClients is present in response
+    obj.visibleToClients = typeof obj.visibleToClients === 'boolean' ? obj.visibleToClients : true;
 
     res.json({
       success: true,

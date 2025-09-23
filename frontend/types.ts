@@ -59,6 +59,7 @@ export interface Product {
   description: string;
   sellingPrice?: number;
   stock?: number;
+  visibleToClients?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,4 +92,13 @@ export interface Vendor {
   userId?: string; // Link to User table
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Demand {
+  id: string;
+  productId: { id: string; name?: string; itemNumber?: string } | string;
+  userId: string | { _id: string; username?: string };
+  quantity: number;
+  notes?: string;
+  createdAt: string;
 }

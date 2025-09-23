@@ -18,6 +18,7 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
     { path: '/orders', label: 'Orders'},
     { path: '/vendors', label: 'Vendors'},
     { path: '/products', label: 'Products'},
+    { path: '/demands', label: 'Demands'},
     { path: '/users', label: 'Users'},
   ];
 

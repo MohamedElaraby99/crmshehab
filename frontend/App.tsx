@@ -9,6 +9,7 @@ import ProductsPage from './components/ProductsPage';
 import OrdersPage from './components/OrdersPage';
 import Navigation from './components/Navigation';
 import UsersPage from './components/UsersPage';
+import DemandsPage from './components/DemandsPage';
 import { User, Vendor } from './types';
 import { authenticateUser, authenticateVendor, updateVendorByVendor, getCurrentUser, getCurrentVendor, isAuthenticated } from './services/api';
 
@@ -193,8 +194,8 @@ const App: React.FC = () => {
           </header>
           <div className="h-16"></div>
           <Routes>
-            <Route path="/" element={<ProductsPage onLogout={handleLogout} />} />
-            <Route path="/products" element={<ProductsPage onLogout={handleLogout} />} />
+            <Route path="/" element={<ProductsPage onLogout={handleLogout} forceClient={true} />} />
+            <Route path="/products" element={<ProductsPage onLogout={handleLogout} forceClient={true} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
@@ -212,6 +213,7 @@ const App: React.FC = () => {
           <Route path="/orders" element={<OrdersPage onLogout={handleLogout} />} />
           <Route path="/vendors" element={<VendorsPage onLogout={handleLogout} />} />
           <Route path="/products" element={<ProductsPage onLogout={handleLogout} />} />
+          <Route path="/demands" element={<DemandsPage onLogout={handleLogout} />} />
           <Route path="/users" element={<UsersPage onLogout={handleLogout} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

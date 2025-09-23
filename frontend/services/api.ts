@@ -1,4 +1,4 @@
-import { User, Order, Product, Vendor, ProductPurchase } from '../types';
+import { User, Order, Product, Vendor, ProductPurchase, Demand } from '../types';
 
 const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4031/api';
 
@@ -54,8 +54,11 @@ const apiRequestUnauth = async (endpoint: string, options: RequestInit = {}): Pr
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
       ...options.headers,
     },
+    cache: 'no-store',
     ...options,
   };
 
@@ -92,8 +95,11 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<
     headers: {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
       ...options.headers,
     },
+    cache: 'no-store',
     ...options,
   };
 
@@ -312,6 +318,16 @@ export const getAllProducts = async (): Promise<Product[]> => {
   }
 };
 
+export const getVisibleProducts = async (): Promise<Product[]> => {
+  try {
+    const response = await apiRequest('/products/visible/list');
+    return response.success ? response.data : [];
+  } catch (error) {
+    console.error('Get visible products failed:', error);
+    return [];
+  }
+};
+
 export const getProductById = async (id: string): Promise<Product | null> => {
   try {
     const response = await apiRequest(`/products/${id}`);
@@ -508,6 +524,16 @@ export const createDemand = async (productId: string, quantity: number = 1, note
   } catch (error) {
     console.error('Create demand failed:', error);
     return false;
+  }
+};
+
+export const getAllDemands = async (): Promise<Demand[]> => {
+  try {
+    const response = await apiRequest('/demands');
+    return response?.success ? response.data : [];
+  } catch (error) {
+    console.error('Get demands failed:', error);
+    return [];
   }
 };
 

@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Product, ProductPurchase, User } from '../types';
-import { createProduct, deleteProduct, getAllOrders, getAllProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct } from '../services/api';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct } from '../services/api';
 import { createDemand } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
 interface ProductsPageProps {
   onLogout: () => void;
+  forceClient?: boolean;
 }
 
-const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
+const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -22,7 +23,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
   const [cartItems, setCartItems] = useState<Array<{ id: string; name: string; itemNumber: string; price: number; quantity: number }>>([]);
 
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
-  const userIsClient = useMemo(() => (currentUser?.role === 'client'), [currentUser]);
+  const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
 
   useEffect(() => {
     const init = async () => {
@@ -39,6 +40,12 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
     };
     init();
   }, []);
+
+  // Refetch when role changes (e.g., after currentUser loads)
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userIsClient]);
 
   const persistCart = (items: typeof cartItems) => {
     setCartItems(items);
@@ -101,7 +108,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
     setLoading(true);
     try {
       const [allProducts, allOrders] = await Promise.all([
-        getAllProducts(),
+        userIsClient ? getVisibleProducts() : getAllProducts(),
         getAllOrders()
       ]);
       setProducts(allProducts);
@@ -160,15 +167,42 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
     }
   };
 
+  const toggleVisibility = async (product: Product) => {
+    const current = ((product as any).visibleToClients === false ? false : true);
+    const next = !current;
+    const productId = (product as any).id || (product as any)._id;
+    if (!productId) {
+      console.error('toggleVisibility: missing product id', product);
+      alert('Cannot update visibility: missing product id');
+      return;
+    }
+    // Optimistic update
+    setProducts(prev => prev.map(p => ((p as any).id || (p as any)._id) === productId ? { ...p, visibleToClients: next } : p));
+    try {
+      const updated = await updateProduct(productId, { visibleToClients: next } as any);
+      if (!updated) {
+        // Revert on failure
+        setProducts(prev => prev.map(p => ((p as any).id || (p as any)._id) === productId ? { ...p, visibleToClients: current } : p));
+        alert('Failed to update visibility.');
+      }
+    } catch (error) {
+      // Revert on error
+      setProducts(prev => prev.map(p => ((p as any).id || (p as any)._id) === productId ? { ...p, visibleToClients: current } : p));
+      console.error('Failed to toggle visibility:', error);
+      alert('Failed to update visibility.');
+    }
+  };
+
   const filteredProducts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return products;
-    return products.filter((p) =>
+    const base = userIsClient ? products.filter((p) => (p as any).visibleToClients === true) : products;
+    if (!term) return base;
+    return base.filter((p) =>
       p.name.toLowerCase().includes(term) ||
       p.itemNumber.toLowerCase().includes(term) ||
       p.description.toLowerCase().includes(term)
     );
-  }, [products, searchTerm]);
+  }, [products, searchTerm, userIsClient]);
 
   const getProductPurchaseStatsSync = (productId: string) => {
     return { totalPurchases: 0, uniqueVendors: 0, totalQuantity: 0, totalAmount: 0 };
@@ -268,6 +302,9 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
                           Stock
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Visible
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
                         </th>
                       </>
@@ -326,6 +363,15 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout }) => {
                           <>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">{typeof (product as any).stock === 'number' ? (product as any).stock : 0}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <button
+                                onClick={() => toggleVisibility(product)}
+                                className={`px-3 py-1 rounded text-xs font-semibold border ${((product as any).visibleToClients === false ? false : true) ? 'bg-yellow-100 text-yellow-800 border-yellow-300' : 'bg-green-100 text-green-800 border-green-300'}`}
+                                title={((product as any).visibleToClients === false ? false : true) ? 'Make Hidden' : 'Make Visible'}
+                              >
+                                {((product as any).visibleToClients === false ? false : true) ? 'Make Hidden' : 'Make Visible'}
+                              </button>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex space-x-2">
@@ -567,6 +613,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
     description: product?.description || '',
     sellingPrice: (product as any)?.sellingPrice as number | undefined ?? undefined,
     stock: (product as any)?.stock as number | undefined ?? undefined,
+    visibleToClients: (product as any)?.visibleToClients as boolean | undefined ?? true,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -579,6 +626,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
     if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
       productData.sellingPrice = formData.sellingPrice;
     }
+    productData.visibleToClients = !!formData.visibleToClients;
     if (product) {
       productData.id = product.id;
     }
@@ -586,10 +634,10 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target as HTMLInputElement;
+    const { name, value, type, checked } = e.target as HTMLInputElement;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : value
+      [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : (type === 'checkbox' ? checked : value)
     }));
   };
 
@@ -652,6 +700,17 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
                 onChange={handleChange}
               />
             </div>
+      <div className="flex items-center space-x-2">
+        <input
+          id="visibleToClients"
+          name="visibleToClients"
+          type="checkbox"
+          checked={!!formData.visibleToClients}
+          onChange={handleChange}
+          className="h-4 w-4"
+        />
+        <label htmlFor="visibleToClients" className="text-sm font-medium text-gray-700">Visible to Clients</label>
+      </div>
             <div className="flex justify-end space-x-2 pt-2">
               <button type="button" onClick={onClose} className="px-4 py-2 rounded border">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white">Save</button>

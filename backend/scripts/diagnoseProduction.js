@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const PRODUCTION_API_URL = 'https://api.crm.fikra.solutions/api';
+// const PRODUCTION_API_URL = 'https://api.crm.fikra.solutions/api';
 
 async function diagnoseProduction() {
   console.log('🔍 Diagnosing Production Server Issues...\n');
@@ -64,18 +64,18 @@ async function diagnoseProduction() {
   console.log('\n3️⃣ Testing different endpoints...');
   const endpoints = ['/health', '/api/health', '/'];
   
-  for (const endpoint of endpoints) {
-    try {
-      const url = `https://api.crm.fikra.solutions${endpoint}`;
-      const response = await axios.get(url, {
-        timeout: 3000,
-        validateStatus: () => true
-      });
-      console.log(`✅ ${endpoint}: Status ${response.status}`);
-    } catch (error) {
-      console.log(`❌ ${endpoint}: ${error.message}`);
-    }
-  }
+  // for (const endpoint of endpoints) {
+  //   try {
+  //     const url = `https://api.crm.fikra.solutions${endpoint}`;
+  //     const response = await axios.get(url, {
+  //       timeout: 3000,
+  //       validateStatus: () => true
+  //     });
+  //     console.log(`✅ ${endpoint}: Status ${response.status}`);
+  //   } catch (error) {
+  //     console.log(`❌ ${endpoint}: ${error.message}`);
+  //   }
+  // }
 
   console.log('\n📋 Diagnosis Summary:');
   console.log('If you see 502 errors, the backend service is not running.');

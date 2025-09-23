@@ -42,7 +42,10 @@ router.get('/', authenticateUser, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    const list = await Demand.find().sort({ createdAt: -1 }).populate('productId', 'name itemNumber');
+    const list = await Demand.find()
+      .sort({ createdAt: -1 })
+      .populate('productId', 'name itemNumber')
+      .populate('userId', 'username');
     res.json({ success: true, data: list });
   } catch (error) {
     console.error('List demands error:', error);
