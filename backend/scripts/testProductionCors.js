@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 const PRODUCTION_API_URL = 'http://localhost:3000/api';
-// const FRONTEND_URL = 'https://crm.fikra.solutions';
+const FRONTEND_URL = 'https://crm.fikra.solutions';
 
 async function testProductionCors() {
   console.log('🧪 Testing Production CORS Configuration...\n');
