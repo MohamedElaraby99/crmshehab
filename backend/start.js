@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const User = require('./models/User');
-const Supplier = require('./models/Supplier');
 const Vendor = require('./models/Vendor');
 const Product = require('./models/Product');
 const Order = require('./models/Order');
@@ -13,42 +12,7 @@ const sampleData = {
       username: 'admin',
       password: 'admin123',
       role: 'admin',
-      isSupplier: false
     },
-    {
-      username: 'supplierA',
-      password: 'supplier123',
-      role: 'supplier',
-      isSupplier: true
-    },
-    {
-      username: 'supplierB',
-      password: 'supplier123',
-      role: 'supplier',
-      isSupplier: true
-    }
-  ],
-  suppliers: [
-    {
-      name: 'Auto Parts Central',
-      contactPerson: 'John Smith',
-      email: 'john@autopartscentral.com',
-      phone: '+1-555-0123',
-      address: '123 Main Street',
-      city: 'Detroit',
-      country: 'USA',
-      status: 'active'
-    },
-    {
-      name: 'Global Motors Ltd',
-      contactPerson: 'Sarah Johnson',
-      email: 'sarah@globalmotors.com',
-      phone: '+1-555-0456',
-      address: '456 Business Ave',
-      city: 'Chicago',
-      country: 'USA',
-      status: 'active'
-    }
   ],
   vendors: [
     {
@@ -84,7 +48,6 @@ const sampleData = {
       category: 'Engine Parts',
       price: 25.99,
       stock: 100,
-      supplierId: null // Will be set after suppliers are created
     },
     {
       itemNumber: 'BRA002',
@@ -93,7 +56,6 @@ const sampleData = {
       category: 'Brake System',
       price: 89.99,
       stock: 50,
-      supplierId: null
     },
     {
       itemNumber: 'SUS003',
@@ -102,7 +64,6 @@ const sampleData = {
       category: 'Suspension',
       price: 150.00,
       stock: 30,
-      supplierId: null
     }
   ]
 };
@@ -128,13 +89,6 @@ async function seedDatabase() {
     }
     console.log(`✅ Created ${users.length} users`);
 
-    // Create suppliers
-    const suppliers = await Supplier.insertMany(sampleData.suppliers);
-    console.log(`✅ Created ${suppliers.length} suppliers`);
-
-    // Update users with supplier IDs
-    await User.findByIdAndUpdate(users[1]._id, { supplierId: suppliers[0]._id });
-    await User.findByIdAndUpdate(users[2]._id, { supplierId: suppliers[1]._id });
 
     // Create vendors
     const vendors = await Vendor.insertMany(sampleData.vendors);
@@ -146,17 +100,12 @@ async function seedDatabase() {
         username: vendor.username,
         password: vendor.password,
         role: 'vendor',
-        isSupplier: false
       });
       await user.save();
       vendor.userId = user._id;
       await vendor.save();
     }
 
-    // Update products with supplier IDs
-    sampleData.products[0].supplierId = suppliers[0]._id;
-    sampleData.products[1].supplierId = suppliers[1]._id;
-    sampleData.products[2].supplierId = suppliers[0]._id;
 
     // Create products
     const products = await Product.insertMany(sampleData.products);
@@ -165,7 +114,6 @@ async function seedDatabase() {
     // Create sample orders
     const order1 = new Order({
       orderNumber: 'ORD-001',
-      supplierId: suppliers[0]._id,
       vendorId: vendors[0]._id,
       items: [
         {
@@ -184,7 +132,6 @@ async function seedDatabase() {
 
     const order2 = new Order({
       orderNumber: 'ORD-002',
-      supplierId: suppliers[1]._id,
       vendorId: vendors[1]._id,
       items: [
         {

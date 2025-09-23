@@ -15,18 +15,9 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 6
   },
-  isSupplier: {
-    type: Boolean,
-    default: false
-  },
-  supplierId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Supplier',
-    default: null
-  },
   role: {
     type: String,
-    enum: ['admin', 'supplier', 'vendor'],
+    enum: ['admin', 'vendor'],
     default: 'admin'
   },
   isActive: {

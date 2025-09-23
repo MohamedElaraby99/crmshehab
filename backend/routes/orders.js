@@ -15,7 +15,6 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
       search, 
       searchType = 'all',
       status,
-      supplierId,
       vendorId,
       sortBy = 'orderDate',
       sortOrder = 'desc'
@@ -52,9 +51,6 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
       query.status = status;
     }
 
-    if (supplierId) {
-      query.supplierId = supplierId;
-    }
 
     if (vendorId) {
       query.vendorId = vendorId;
@@ -115,7 +111,6 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
 router.get('/:id', authenticateUserOrVendor, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate('supplierId', 'name contactPerson email phone address')
       .populate('vendorId', 'name contactPerson email phone address')
       .populate('items.productId', 'name itemNumber description');
 
@@ -150,12 +145,10 @@ router.get('/:id', authenticateUserOrVendor, async (req, res) => {
 // Create order
 router.post('/', [
   authenticateUserOrVendor,
-  body('supplierId').isMongoId().withMessage('Valid supplier ID is required'),
   body('vendorId').isMongoId().withMessage('Valid vendor ID is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
   body('items.*.productId').isMongoId().withMessage('Valid product ID is required'),
-  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('items.*.unitPrice').isNumeric().withMessage('Unit price must be a number')
+  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -167,13 +160,13 @@ router.post('/', [
       });
     }
 
-    const { supplierId, vendorId, items, shippingAddress, notes, expectedDeliveryDate, orderNumber: providedOrderNumber, confirmFormShehab } = req.body;
+    const { vendorId, items, shippingAddress, notes, expectedDeliveryDate, orderNumber: providedOrderNumber, confirmFormShehab } = req.body;
 
     // Use provided order number or generate one
     const orderNumber = providedOrderNumber || `ORD-${String(Date.now()).slice(-6)}`;
 
-    // Calculate total amount
-    let totalAmount = 0;
+    // Do not calculate or require prices on creation
+    let totalAmount = undefined;
     const processedItems = [];
 
     for (const item of items) {
@@ -185,21 +178,15 @@ router.post('/', [
         });
       }
 
-      const totalPrice = item.quantity * item.unitPrice;
-      totalAmount += totalPrice;
-
-      processedItems.push({
+    processedItems.push({
         productId: item.productId,
         itemNumber: product.itemNumber,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice
+        quantity: item.quantity
       });
     }
 
     const order = new Order({
       orderNumber,
-      supplierId,
       vendorId,
       items: processedItems,
       totalAmount,
@@ -211,7 +198,6 @@ router.post('/', [
 
     await order.save();
     await order.populate([
-      { path: 'supplierId', select: 'name contactPerson email' },
       { path: 'vendorId', select: 'name contactPerson email' },
       { path: 'items.productId', select: 'name itemNumber' }
     ]);
@@ -234,6 +220,7 @@ router.post('/', [
 router.put('/:id', [
   authenticateUserOrVendor,
   body('status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid status'),
+  body('priceApprovalStatus').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Invalid price approval status'),
   body('confirmFormShehab').optional().trim().isLength({ max: 500 }).withMessage('Confirmation form too long'),
   body('estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Estimated date too long'),
   body('invoiceNumber').optional().trim().isLength({ max: 100 }).withMessage('Invoice number too long'),
@@ -271,6 +258,16 @@ router.put('/:id', [
 
     const updateData = {};
     if (req.body.status) updateData.status = req.body.status;
+    if (req.body.priceApprovalStatus) {
+      // Only admin/user can change priceApprovalStatus, vendors cannot
+      if (req.userType === 'vendor') {
+        return res.status(403).json({
+          success: false,
+          message: 'Vendors are not allowed to update price approval status'
+        });
+      }
+      updateData.priceApprovalStatus = req.body.priceApprovalStatus;
+    }
     if (req.body.confirmFormShehab !== undefined) updateData.confirmFormShehab = req.body.confirmFormShehab;
     if (req.body.estimatedDateReady !== undefined) updateData.estimatedDateReady = req.body.estimatedDateReady;
     if (req.body.invoiceNumber !== undefined) updateData.invoiceNumber = req.body.invoiceNumber;
@@ -282,12 +279,34 @@ router.put('/:id', [
     if (req.body.expectedDeliveryDate) updateData.expectedDeliveryDate = req.body.expectedDeliveryDate;
     if (req.body.actualDeliveryDate) updateData.actualDeliveryDate = req.body.actualDeliveryDate;
 
+    // If vendor provided price updates for items, apply carefully
+    if (Array.isArray(req.body.items) && req.body.items.length > 0) {
+      const itemUpdate = req.body.items[0];
+      if (typeof itemUpdate.unitPrice === 'number') {
+        // Update first item's unitPrice and totalPrice, and recompute totalAmount
+        const orderDoc = await Order.findById(req.params.id);
+        if (!orderDoc || !orderDoc.isActive) {
+          return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        // Vendor cannot change productId or quantity here; only price
+        if (orderDoc.items && orderDoc.items[0]) {
+          const quantity = orderDoc.items[0].quantity || 0;
+          orderDoc.items[0].unitPrice = itemUpdate.unitPrice;
+          orderDoc.items[0].totalPrice = quantity * itemUpdate.unitPrice;
+          // Recompute totalAmount from items
+          orderDoc.totalAmount = orderDoc.items.reduce((sum, it) => sum + (it.totalPrice || 0), 0);
+          // Reset approval to pending when vendor changes price
+          orderDoc.priceApprovalStatus = 'pending';
+          await orderDoc.save();
+        }
+      }
+    }
+
     const updatedOrder = await Order.findByIdAndUpdate(
       req.params.id,
       updateData,
       { new: true, runValidators: true }
     ).populate([
-      { path: 'supplierId', select: 'name contactPerson email' },
       { path: 'vendorId', select: 'name contactPerson email' },
       { path: 'items.productId', select: 'name itemNumber' }
     ]);
@@ -359,7 +378,6 @@ router.get('/vendor/:vendorId', authenticateVendor, async (req, res) => {
     }
 
     const orders = await Order.find(query)
-      .populate('supplierId', 'name contactPerson email')
       .populate('items.productId', 'name itemNumber')
       .sort({ orderDate: -1 })
       .limit(limit * 1)

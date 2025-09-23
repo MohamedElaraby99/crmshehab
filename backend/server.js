@@ -7,7 +7,6 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
-const supplierRoutes = require('./routes/suppliers');
 const vendorRoutes = require('./routes/vendors');
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
@@ -140,7 +139,6 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/crm_test_
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/suppliers', supplierRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);

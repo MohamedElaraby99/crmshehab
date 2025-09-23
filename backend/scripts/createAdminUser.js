@@ -27,14 +27,12 @@ async function createAdminUser(username, password, options = {}) {
         console.log('🔄 Updating existing user...');
         existingUser.password = password;
         existingUser.role = options.role || 'admin';
-        existingUser.isSupplier = options.isSupplier || false;
         existingUser.isActive = options.isActive !== undefined ? options.isActive : true;
         existingUser.updatedAt = new Date();
         
         await existingUser.save();
         console.log(`✅ User '${username}' updated successfully!`);
         console.log(`   - Role: ${existingUser.role}`);
-        console.log(`   - Is Supplier: ${existingUser.isSupplier}`);
         console.log(`   - Is Active: ${existingUser.isActive}`);
       } else {
         console.log('💡 Use --update flag to update existing user or choose a different username');
@@ -46,14 +44,12 @@ async function createAdminUser(username, password, options = {}) {
         username,
         password,
         role: options.role || 'admin',
-        isSupplier: options.isSupplier || false,
         isActive: options.isActive !== undefined ? options.isActive : true
       });
 
       await adminUser.save();
       console.log(`✅ Admin user '${username}' created successfully!`);
       console.log(`   - Role: ${adminUser.role}`);
-      console.log(`   - Is Supplier: ${adminUser.isSupplier}`);
       console.log(`   - Is Active: ${adminUser.isActive}`);
     }
 
@@ -78,7 +74,6 @@ function parseArgs() {
     username: defaultAdmin.username,
     password: defaultAdmin.password,
     role: 'admin',
-    isSupplier: false,
     isActive: true,
     update: false
   };
@@ -100,7 +95,6 @@ function parseArgs() {
         options.role = args[++i];
         break;
       case '--supplier':
-        options.isSupplier = true;
         break;
       case '--inactive':
         options.isActive = false;
@@ -174,7 +168,6 @@ async function main() {
   console.log(`   - Username: ${options.username}`);
   console.log(`   - Password: ${'*'.repeat(options.password.length)}`);
   console.log(`   - Role: ${options.role}`);
-  console.log(`   - Is Supplier: ${options.isSupplier}`);
   console.log(`   - Is Active: ${options.isActive}`);
   console.log(`   - Update Mode: ${options.update}\n`);
   

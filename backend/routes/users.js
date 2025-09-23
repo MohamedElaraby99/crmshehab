@@ -10,7 +10,6 @@ router.get('/', authenticateUser, requireAdmin, async (req, res) => {
   try {
     const users = await User.find({ isActive: true })
       .select('-password')
-      .populate('supplierId', 'name')
       .sort({ createdAt: -1 });
 
     res.json({
@@ -31,7 +30,6 @@ router.get('/:id', authenticateUser, async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
       .select('-password')
-      .populate('supplierId', 'name');
 
     if (!user || !user.isActive) {
       return res.status(404).json({
@@ -59,8 +57,7 @@ router.post('/', [
   requireAdmin,
   body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['admin', 'supplier', 'vendor']).withMessage('Invalid role'),
-  body('isSupplier').isBoolean().withMessage('isSupplier must be boolean')
+  body('role').isIn(['admin', 'vendor']).withMessage('Invalid role'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -72,7 +69,7 @@ router.post('/', [
       });
     }
 
-    const { username, password, role, isSupplier, supplierId } = req.body;
+    const { username, password, role } = req.body;
 
     // Check if username already exists
     const existingUser = await User.findOne({ username });
@@ -87,8 +84,6 @@ router.post('/', [
       username,
       password,
       role,
-      isSupplier,
-      supplierId: isSupplier ? supplierId : null
     });
 
     await user.save();
@@ -111,8 +106,7 @@ router.post('/', [
 router.put('/:id', [
   authenticateUser,
   body('username').optional().trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
-  body('role').optional().isIn(['admin', 'supplier', 'vendor']).withMessage('Invalid role'),
-  body('isSupplier').optional().isBoolean().withMessage('isSupplier must be boolean')
+  body('role').optional().isIn(['admin', 'vendor']).withMessage('Invalid role'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -124,7 +118,7 @@ router.put('/:id', [
       });
     }
 
-    const { username, role, isSupplier, supplierId, isActive } = req.body;
+    const { username, role, isActive } = req.body;
     const userId = req.params.id;
 
     // Check if user exists
@@ -151,8 +145,6 @@ router.put('/:id', [
     const updateData = {};
     if (username) updateData.username = username;
     if (role) updateData.role = role;
-    if (typeof isSupplier === 'boolean') updateData.isSupplier = isSupplier;
-    if (supplierId) updateData.supplierId = isSupplier ? supplierId : null;
     if (typeof isActive === 'boolean') updateData.isActive = isActive;
 
     const updatedUser = await User.findByIdAndUpdate(

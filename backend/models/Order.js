@@ -8,11 +8,6 @@ const orderSchema = new mongoose.Schema({
     trim: true,
     maxlength: 50
   },
-  supplierId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Supplier',
-    required: true
-  },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Vendor',
@@ -36,23 +31,31 @@ const orderSchema = new mongoose.Schema({
     },
     unitPrice: {
       type: Number,
-      required: true,
-      min: 0
+      required: false,
+      min: 0,
+      default: undefined
     },
     totalPrice: {
       type: Number,
-      required: true,
-      min: 0
+      required: false,
+      min: 0,
+      default: undefined
     }
   }],
   totalAmount: {
     type: Number,
-    required: true,
-    min: 0
+    required: false,
+    min: 0,
+    default: undefined
   },
   status: {
     type: String,
     enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'],
+    default: 'pending'
+  },
+  priceApprovalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
     default: 'pending'
   },
   confirmFormShehab: {
@@ -133,7 +136,6 @@ orderSchema.pre('save', function(next) {
 
 // Index for better search performance
 orderSchema.index({ orderNumber: 1 });
-orderSchema.index({ supplierId: 1 });
 orderSchema.index({ vendorId: 1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ orderDate: -1 });

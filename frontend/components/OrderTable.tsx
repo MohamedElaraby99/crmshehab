@@ -6,9 +6,9 @@ import * as XLSX from 'xlsx';
 
 interface OrderTableProps {
   orders: Order[];
-  onUpdateOrder: (order: Order) => void;
-  onDeleteOrder: (orderId: string) => void;
-  onViewHistory: (itemNumber: string) => void;
+  onUpdateOrder?: (order: Order) => void;
+  onDeleteOrder?: (orderId: string) => void;
+  onViewHistory?: (itemNumber: string) => void;
   onConfirmOrder?: (orderId: string) => void;
   userIsAdmin: boolean;
 }
@@ -26,7 +26,9 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   const allColumns = [
     { key: 'itemNumber', label: 'ITEM NUMBER', width: 150, type: 'text' },
     { key: 'quantity', label: 'QTY', width: 80, type: 'number' },
-    { key: 'price', label: 'PRICE', width: 100, type: 'currency' },
+    { key: 'price', label: 'PRICE', width: 100, type: 'number' },
+    { key: 'total', label: 'TOTAL', width: 110, type: 'number' },
+    { key: 'priceApprovalStatus', label: 'PRICE APPROVAL', width: 130, type: 'text' },
     { key: 'confirmFormShehab', label: 'CONFIRM FORM SHEHAB ', width: 150, type: 'date' },
     { key: 'estimatedDateReady', label: 'EST. DATE READY', width: 140, type: 'date' },
     { key: 'invoiceNumber', label: 'INVOICE #', width: 120, type: 'text' },
@@ -151,7 +153,9 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   // Bulk actions
   const handleBulkDelete = () => {
     if (selectedRows.size > 0 && window.confirm(`Delete ${selectedRows.size} selected orders?`)) {
-      selectedRows.forEach(orderId => onDeleteOrder(orderId));
+      if (onDeleteOrder) {
+        selectedRows.forEach(orderId => onDeleteOrder(orderId));
+      }
       setSelectedRows(new Set());
     }
   };
@@ -352,9 +356,9 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
               <OrderRow 
                 key={order.id} 
                 order={order} 
-                onUpdate={onUpdateOrder}
-                onDelete={onDeleteOrder}
-                onViewHistory={onViewHistory}
+                onUpdate={onUpdateOrder || (() => {})}
+                onDelete={onDeleteOrder || (() => {})}
+                onViewHistory={onViewHistory || (() => {})}
                 onConfirm={onConfirmOrder}
                 userIsAdmin={userIsAdmin} 
                 isSelected={selectedRows.has(order.id)}

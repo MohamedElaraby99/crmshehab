@@ -144,19 +144,40 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
     const newErrors: Record<string, string> = {};
     let isValid = true;
 
-    fieldConfigs
-      .filter(field => field.editableBy === userRole || field.editableBy === 'both')
-      .forEach(field => {
-        const value = formData[field.name];
-        const error = validateField(field, value);
-        if (error) {
-          newErrors[field.name] = error;
-          isValid = false;
-        }
-      });
+    // Only validate fields that are visible to the current role and editable by them
+    const fieldsToValidate = fieldConfigs.filter(field =>
+      (field.visibleTo === userRole || field.visibleTo === 'both') &&
+      (field.editableBy === userRole || field.editableBy === 'both')
+    );
+
+    // Additionally exclude fields we intentionally hide from admin in UI
+    const finalFields = userRole === 'admin'
+      ? fieldsToValidate.filter(f => f.name !== 'price' && f.name !== 'confirmFormShehab')
+      : fieldsToValidate;
+
+    finalFields.forEach(field => {
+      const value = formData[field.name];
+      const error = validateField(field, value);
+      if (error) {
+        newErrors[field.name] = error;
+        isValid = false;
+      }
+    });
 
     setErrors(newErrors);
     return isValid;
+  };
+
+  const handleCancel = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      onClose();
+    } catch (err) {
+      console.error('DynamicOrderForm: onClose failed', err);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -178,7 +199,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
 
       // Find the product by selected ID or item number
       const selectedProduct = selectedProductId 
-        ? products.find(p => p.id === selectedProductId)
+        ? products.find(p => p.id === selectedProductId || (p as any)._id === selectedProductId)
         : products.find(p => p.itemNumber === formData.itemNumber);
       
       if (!selectedProduct) {
@@ -186,34 +207,66 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         return;
       }
 
-      // For now, we'll use the vendorId as supplierId since we don't have a separate supplier concept
-      // In a real system, you might want to add a supplier selection field
-      const supplierId = formData.vendorId; // Using vendor as supplier for now
+      // Admin creates/updates full order (vendor fills price/confirm later)
+      const selectedProductIdFinal = (selectedProduct as any).id || (selectedProduct as any)._id;
 
-      // Admin creates/updates full order
       orderData = {
         orderNumber: order?.orderNumber || `ORD-${String(Date.now()).slice(-6)}`,
         vendorId: formData.vendorId,
-        supplierId: supplierId,
         items: [{
-          productId: selectedProduct.id,
+          productId: selectedProductIdFinal,
           itemNumber: formData.itemNumber,
-          quantity: formData.quantity,
-          unitPrice: formData.price,
-          totalPrice: formData.quantity * formData.price
+          quantity: formData.quantity
         }],
-        totalAmount: formData.quantity * formData.price,
         status: formData.status,
         ...formData
       };
 
+      // Remove vendor-only fields from admin create payload
+      if (orderData.price !== undefined) delete orderData.price;
+      if (orderData.confirmFormShehab !== undefined) delete orderData.confirmFormShehab;
+      if (orderData.totalAmount !== undefined) delete orderData.totalAmount;
+      if (orderData.items && orderData.items[0]) {
+        if (orderData.items[0].unitPrice !== undefined) delete orderData.items[0].unitPrice;
+        if (orderData.items[0].totalPrice !== undefined) delete orderData.items[0].totalPrice;
+      }
+
+      // Backend compatibility: some environments still expect supplierId and numeric prices
+      // Mirror vendorId to supplierId and set zero prices if missing
+      (orderData as any).supplierId = orderData.vendorId;
+      if (orderData.items && orderData.items[0]) {
+        if (orderData.items[0].unitPrice === undefined) orderData.items[0].unitPrice = 0;
+        if (orderData.items[0].totalPrice === undefined) orderData.items[0].totalPrice = 0;
+      }
+      if (orderData.totalAmount === undefined) orderData.totalAmount = 0;
+
       console.log('DynamicOrderForm: Sending order data to backend', orderData);
     } else {
       // Vendor updates only their fields
+      const quantity = Number(formData.quantity) || 0;
+      const unitPrice = Number(formData.price) || 0;
+      const computedTotal = quantity * unitPrice;
+
       orderData = {
         id: order?.id,
         ...formData
       };
+
+      // Ensure nested items and totals are updated
+      if (order && order.items && order.items[0]) {
+        const firstItem = order.items[0];
+        orderData.items = [
+          {
+            productId: (firstItem.productId as any)?.id || (firstItem.productId as any)?._id || firstItem.productId,
+            itemNumber: firstItem.itemNumber,
+            quantity,
+            unitPrice,
+            totalPrice: computedTotal
+          }
+        ];
+      }
+
+      orderData.totalAmount = computedTotal;
     }
 
     // Ensure we have an ID for updates
@@ -423,6 +476,8 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {visibleFields
                     .filter(field => field.editableBy === 'admin')
+                    .filter(field => field.name !== 'price')
+                    .filter(field => field.name !== 'confirmFormShehab')
                     .map(field => renderField(field))}
                 </div>
               </div>
@@ -456,7 +511,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
             <div className="flex justify-end space-x-3 pt-6 border-t">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleCancel}
                 className="px-6 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 Cancel

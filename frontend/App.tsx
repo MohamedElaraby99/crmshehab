@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './components/LoginPage';
-import SupplierDashboard from './components/SupplierDashboard';
 import VendorDashboard from './components/VendorDashboard';
+import AdminDashboard from './components/AdminDashboard';
 import VendorsPage from './components/VendorsPage';
 import ProductsPage from './components/ProductsPage';
 import OrdersPage from './components/OrdersPage';
@@ -169,7 +169,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-gray-100">
         <Navigation onLogout={handleLogout} />
         <Routes>
-          <Route path="/" element={<SupplierDashboard user={currentUser!} onLogout={handleLogout} />} />
+          <Route path="/" element={<AdminDashboard user={currentUser!} onLogout={handleLogout} />} />
           <Route path="/orders" element={<OrdersPage onLogout={handleLogout} />} />
           <Route path="/vendors" element={<VendorsPage onLogout={handleLogout} />} />
           <Route path="/products" element={<ProductsPage onLogout={handleLogout} />} />

@@ -108,18 +108,33 @@ const EditableCell: React.FC<{
       onClick={handleClick}
     >
       {isEditing ? (
-        <input
-            type={type}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          className={inputClasses}
-          autoFocus
-        />
+        type === 'select' ? (
+          <select
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className={inputClasses}
+            autoFocus
+          >
+            <option value="pending">PENDING</option>
+            <option value="approved">APPROVED</option>
+            <option value="rejected">REJECTED</option>
+          </select>
+        ) : (
+          <input
+              type={type}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            className={inputClasses}
+            autoFocus
+          />
+        )
       ) : (
         <div className="flex items-center h-full">
-          {formatDisplayValue(value, type)}
+          {formatDisplayValue(value, type).toString().toUpperCase()}
         </div>
       )}
     </td>
@@ -156,7 +171,11 @@ const OrderRow: React.FC<OrderRowProps> = ({
     }
   }, []);
 
-  const canEditField = (fieldName: keyof Order): boolean => {
+  const canEditField = (fieldName: keyof Order | 'priceApprovalStatus'): boolean => {
+    // Only admin can edit priceApprovalStatus
+    if (fieldName === 'priceApprovalStatus') {
+      return userIsAdmin;
+    }
     if (userIsAdmin) {
       return true;
     }
@@ -217,6 +236,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
         return firstItem?.quantity || 0;
       case 'price':
         return firstItem?.unitPrice || 0;
+      case 'total':
+        return firstItem ? (firstItem.unitPrice || 0) * (firstItem.quantity || 0) : 0;
       case 'confirmFormShehab':
         return editableOrder.confirmFormShehab || '';
       case 'estimatedDateReady':
@@ -235,6 +256,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
         return editableOrder.notes || '';
       case 'status':
         return editableOrder.status || 'pending';
+      case 'priceApprovalStatus':
+        return (editableOrder as any).priceApprovalStatus || 'pending';
       default:
         return '';
     }
@@ -246,6 +269,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
       case 'price':
       case 'transferAmount':
         return 'number';
+      case 'priceApprovalStatus':
+        return 'select';
       case 'confirmFormShehab':
       case 'estimatedDateReady':
       case 'shippingDateToAgent':

@@ -47,8 +47,8 @@ export const ORDER_FIELD_CONFIGS: OrderFieldConfig[] = [
     label: 'Price ($)',
     type: 'number',
     required: true,
-    editableBy: 'admin',
-    visibleTo: 'both',
+    editableBy: 'vendor',
+    visibleTo: 'vendor',
     validation: { min: 0 }
   },
   {

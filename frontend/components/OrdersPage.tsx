@@ -61,14 +61,21 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
   };
 
   const handleCreateOrder = async (orderData: any) => {
+    // Optimistic UX: close modal immediately
+    setShowModal(false);
     try {
       const created = await createOrder(orderData);
       if (created) {
         await fetchData();
-        setShowModal(false);
+      } else {
+        // Reopen if creation failed silently
+        console.error('Create order returned null response');
+        setShowModal(true);
       }
     } catch (error) {
       console.error('Failed to create order:', error);
+      // Reopen modal on error so user can retry
+      setShowModal(true);
     }
   };
 
@@ -174,10 +181,19 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                       Items
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Unit Price
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total Amount
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Price Approval
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order Date
@@ -225,8 +241,15 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                         <div className="text-sm font-medium text-gray-900">
                           ${order.items && order.items[0] && order.items[0].unitPrice ? order.items[0].unitPrice.toFixed(2) : '0.00'}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          Total: ${order.totalAmount ? order.totalAmount.toFixed(2) : '0.00'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          ${order.items && order.items[0] ? ((order.items[0].unitPrice || 0) * (order.items[0].quantity || 0)).toFixed(2) : '0.00'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          ${order.totalAmount !== undefined && order.totalAmount !== null ? Number(order.totalAmount).toFixed(2) : '0.00'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -234,6 +257,15 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                           order.confirmFormShehab ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
                         }`}>
                           {order.confirmFormShehab ? 'Confirmed' : 'Pending'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          (order as any).priceApprovalStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                          (order as any).priceApprovalStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {(order as any).priceApprovalStatus ? String((order as any).priceApprovalStatus).toUpperCase() : 'PENDING'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

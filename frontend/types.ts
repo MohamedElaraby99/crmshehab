@@ -13,11 +13,11 @@ export interface OrderItem {
 export interface Order {
   id: string;
   orderNumber: string;
-  supplierId: string;
   vendorId: string | { _id: string; name: string; contactPerson?: string; email?: string };
   items: OrderItem[];
   totalAmount: number;
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  priceApprovalStatus?: 'pending' | 'approved' | 'rejected';
   confirmFormShehab?: string;
   shippingAddress?: {
     street?: string;
@@ -43,18 +43,11 @@ export interface Order {
   arrivalDate?: string;
 }
 
-export interface Supplier {
-  id: string;
-  name: string;
-  userId: string;
-}
 
 export interface User {
   id: string;
   username: string;
   password?: string; // Should not be stored long term
-  isSupplier: boolean;
-  supplierId?: string;
 }
 
 export interface Product {

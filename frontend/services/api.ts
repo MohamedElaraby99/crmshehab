@@ -1,4 +1,4 @@
-import { User, Supplier, Order, Product, Vendor, ProductPurchase } from '../types';
+import { User, Order, Product, Vendor, ProductPurchase } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4031/api';
 
@@ -171,64 +171,6 @@ export const getCurrentVendor = async (): Promise<Vendor | null> => {
   }
 };
 
-// Supplier functions
-export const getAllSuppliers = async (): Promise<Supplier[]> => {
-  try {
-    const response = await apiRequest('/suppliers');
-    return response.success ? response.data : [];
-  } catch (error) {
-    console.error('Get suppliers failed:', error);
-    return [];
-  }
-};
-
-export const getSupplierById = async (id: string): Promise<Supplier | null> => {
-  try {
-    const response = await apiRequest(`/suppliers/${id}`);
-    return response.success ? response.data : null;
-  } catch (error) {
-    console.error('Get supplier failed:', error);
-    return null;
-  }
-};
-
-export const createSupplier = async (supplier: Omit<Supplier, 'id' | 'createdAt' | 'updatedAt'>): Promise<Supplier | null> => {
-  try {
-    const response = await apiRequest('/suppliers', {
-      method: 'POST',
-      body: JSON.stringify(supplier),
-    });
-    return response.success ? response.data : null;
-  } catch (error) {
-    console.error('Create supplier failed:', error);
-    return null;
-  }
-};
-
-export const updateSupplier = async (id: string, updates: Partial<Supplier>): Promise<Supplier | null> => {
-  try {
-    const response = await apiRequest(`/suppliers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-    return response.success ? response.data : null;
-  } catch (error) {
-    console.error('Update supplier failed:', error);
-    return null;
-  }
-};
-
-export const deleteSupplier = async (id: string): Promise<boolean> => {
-  try {
-    const response = await apiRequest(`/suppliers/${id}`, {
-      method: 'DELETE',
-    });
-    return response.success;
-  } catch (error) {
-    console.error('Delete supplier failed:', error);
-    return false;
-  }
-};
 
 // Vendor functions
 export const getAllVendors = async (): Promise<Vendor[]> => {
@@ -324,15 +266,6 @@ export const getProductById = async (id: string): Promise<Product | null> => {
   }
 };
 
-export const getProductsBySupplierId = async (supplierId: string): Promise<Product[]> => {
-  try {
-    const response = await apiRequest(`/products?supplierId=${supplierId}`);
-    return response.success ? response.data : [];
-  } catch (error) {
-    console.error('Get products by supplier failed:', error);
-    return [];
-  }
-};
 
 export const createProduct = async (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product | null> => {
   try {
@@ -402,15 +335,6 @@ export const getOrderById = async (id: string): Promise<Order | null> => {
   }
 };
 
-export const getOrdersBySupplierId = async (supplierId: string): Promise<Order[]> => {
-  try {
-    const response = await apiRequest(`/orders?supplierId=${supplierId}`);
-    return response.success ? response.data : [];
-  } catch (error) {
-    console.error('Get orders by supplier failed:', error);
-    return [];
-  }
-};
 
 export const getOrdersByVendorId = async (vendorId: string, searchParams?: { search?: string; searchType?: string }): Promise<Order[]> => {
   try {

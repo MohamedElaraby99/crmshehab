@@ -1,21 +1,15 @@
 
-import { User, Supplier, Order, Product, Vendor, ProductPurchase } from '../types';
+import { User, Order, Product, Vendor, ProductPurchase } from '../types';
 
 export const MOCK_USERS: User[] = [
-  { id: 'u1', username: 'admin', isSupplier: false },
-  { id: 'u2', username: 'supplierA', isSupplier: true, supplierId: 's1' },
-  { id: 'u3', username: 'supplierB', isSupplier: true, supplierId: 's2' },
+  { id: 'u1', username: 'admin' },
   // Vendor users
-  { id: 'u4', username: 'autoparts_central', isSupplier: false },
-  { id: 'u5', username: 'global_motors', isSupplier: false },
-  { id: 'u6', username: 'european_auto', isSupplier: false },
-  { id: 'u7', username: 'asian_parts', isSupplier: false },
+  { id: 'u4', username: 'autoparts_central' },
+  { id: 'u5', username: 'global_motors' },
+  { id: 'u6', username: 'european_auto' },
+  { id: 'u7', username: 'asian_parts' },
 ];
 
-export const MOCK_SUPPLIERS: Supplier[] = [
-  { id: 's1', name: 'Supplier A', userId: 'u2' },
-  { id: 's2', name: 'Supplier B', userId: 'u3' },
-];
 
 export const MOCK_VENDORS: Vendor[] = [
   {
@@ -93,7 +87,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Transmission',
     price: 16.00,
     stock: 150,
-    supplierId: 's1',
     createdAt: '2023-01-15',
     updatedAt: '2024-01-10'
   },
@@ -105,7 +98,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Brakes',
     price: 12.00,
     stock: 300,
-    supplierId: 's1',
     createdAt: '2023-01-20',
     updatedAt: '2024-01-08'
   },
@@ -117,7 +109,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Engine',
     price: 13.00,
     stock: 500,
-    supplierId: 's2',
     createdAt: '2023-02-01',
     updatedAt: '2024-01-12'
   },
@@ -129,7 +120,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Suspension',
     price: 2.50,
     stock: 200,
-    supplierId: 's2',
     createdAt: '2023-02-10',
     updatedAt: '2024-01-05'
   },
@@ -141,7 +131,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Wheels',
     price: 50.00,
     stock: 75,
-    supplierId: 's1',
     createdAt: '2023-03-01',
     updatedAt: '2024-01-15'
   },
@@ -153,7 +142,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Wheels',
     price: 70.00,
     stock: 50,
-    supplierId: 's1',
     createdAt: '2023-03-01',
     updatedAt: '2024-01-15'
   },
@@ -165,7 +153,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Cooling',
     price: 20.00,
     stock: 100,
-    supplierId: 's2',
     createdAt: '2023-03-15',
     updatedAt: '2024-01-10'
   },
@@ -177,7 +164,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Suspension',
     price: 50.00,
     stock: 80,
-    supplierId: 's1',
     createdAt: '2023-04-01',
     updatedAt: '2024-01-12'
   },
@@ -189,7 +175,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Suspension',
     price: 70.00,
     stock: 60,
-    supplierId: 's1',
     createdAt: '2023-04-01',
     updatedAt: '2024-01-12'
   },
@@ -201,7 +186,6 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Steering',
     price: 2.50,
     stock: 150,
-    supplierId: 's2',
     createdAt: '2023-04-10',
     updatedAt: '2024-01-08'
   }
