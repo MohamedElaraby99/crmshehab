@@ -9,39 +9,40 @@ const vendorSchema = new mongoose.Schema({
   },
   contactPerson: {
     type: String,
-    required: true,
+    required: false,
     trim: true,
     maxlength: 100
   },
   email: {
     type: String,
-    required: true,
+    required: false,
     unique: true,
+    sparse: true,
     trim: true,
     lowercase: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
   },
   phone: {
     type: String,
-    required: true,
+    required: false,
     trim: true,
     maxlength: 20
   },
   address: {
     type: String,
-    required: true,
+    required: false,
     trim: true,
     maxlength: 200
   },
   city: {
     type: String,
-    required: true,
+    required: false,
     trim: true,
     maxlength: 50
   },
   country: {
     type: String,
-    required: true,
+    required: false,
     trim: true,
     maxlength: 50
   },

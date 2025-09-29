@@ -307,6 +307,19 @@ export const deleteVendor = async (id: string): Promise<boolean> => {
   }
 };
 
+export const updateVendorCredentials = async (id: string, credentials: { username?: string; password?: string }): Promise<Vendor | null> => {
+  try {
+    const response = await apiRequest(`/vendors/${id}/credentials`, {
+      method: 'PUT',
+      body: JSON.stringify(credentials),
+    });
+    return response.success ? response.data : null;
+  } catch (error) {
+    console.error('Update vendor credentials failed:', error);
+    return null;
+  }
+};
+
 // Product functions
 export const getAllProducts = async (): Promise<Product[]> => {
   try {
@@ -361,6 +374,34 @@ export const updateProduct = async (id: string, updates: Partial<Product>): Prom
     return response.success ? response.data : null;
   } catch (error) {
     console.error('Update product failed:', error);
+    return null;
+  }
+};
+
+export const uploadProductImage = async (id: string, file: File): Promise<string[] | null> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    const url = `${API_BASE_URL}/products/${id}/image`;
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.success ? data.data.images : null;
+  } catch (error) {
+    console.error('Upload product image failed:', error);
     return null;
   }
 };

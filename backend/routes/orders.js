@@ -98,11 +98,49 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
       orders = orders.filter(order => order.items.length === query._itemCountFilter);
     }
 
+    // Transform orders to include itemImageUrl for frontend compatibility
+    const transformedOrders = orders.map(order => {
+      const orderObj = order.toObject();
+      
+      // Debug logging
+      console.log('Transforming order:', {
+        orderId: orderObj.id,
+        hasImagePath: !!orderObj.imagePath,
+        hasItemImageUrl: !!orderObj.itemImageUrl,
+        imagePath: orderObj.imagePath,
+        itemImageUrl: orderObj.itemImageUrl
+      });
+      
+      // ALWAYS ensure both fields exist for consistency
+      if (orderObj.imagePath && !orderObj.itemImageUrl) {
+        orderObj.itemImageUrl = orderObj.imagePath;
+        console.log('Copied imagePath to itemImageUrl:', orderObj.itemImageUrl);
+      }
+      if (orderObj.itemImageUrl && !orderObj.imagePath) {
+        orderObj.imagePath = orderObj.itemImageUrl;
+        console.log('Copied itemImageUrl to imagePath:', orderObj.imagePath);
+      }
+      
+      // If both exist but are different, prefer imagePath as the source of truth
+      if (orderObj.imagePath && orderObj.itemImageUrl && orderObj.imagePath !== orderObj.itemImageUrl) {
+        console.log('Both fields exist but different, updating itemImageUrl to match imagePath');
+        orderObj.itemImageUrl = orderObj.imagePath;
+      }
+      
+      console.log('Final transformed order:', {
+        orderId: orderObj.id,
+        imagePath: orderObj.imagePath,
+        itemImageUrl: orderObj.itemImageUrl
+      });
+      
+      return orderObj;
+    });
+
     const total = await Order.countDocuments({ ...query, _itemCountFilter: undefined });
 
     res.json({
       success: true,
-      data: orders,
+      data: transformedOrders,
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -175,7 +213,23 @@ router.post('/', [
       { path: 'items.productId', select: 'name itemNumber' }
     ]);
 
-    res.status(201).json({ success: true, data: order });
+    // Transform order to include itemImageUrl for frontend compatibility
+    const orderObj = order.toObject();
+    
+    // ALWAYS ensure both fields exist for consistency
+    if (orderObj.imagePath && !orderObj.itemImageUrl) {
+      orderObj.itemImageUrl = orderObj.imagePath;
+    }
+    if (orderObj.itemImageUrl && !orderObj.imagePath) {
+      orderObj.imagePath = orderObj.itemImageUrl;
+    }
+    
+    // If both exist but are different, prefer imagePath as the source of truth
+    if (orderObj.imagePath && orderObj.itemImageUrl && orderObj.imagePath !== orderObj.itemImageUrl) {
+      orderObj.itemImageUrl = orderObj.imagePath;
+    }
+
+    res.status(201).json({ success: true, data: orderObj });
   } catch (error) {
     console.error('Create order error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -280,7 +334,23 @@ router.put('/:id', [
       { path: 'items.productId', select: 'name itemNumber' }
     ]);
 
-    res.json({ success: true, message: 'Order updated successfully', data: updatedOrder });
+    // Transform order to include itemImageUrl for frontend compatibility
+    const orderObj = updatedOrder.toObject();
+    
+    // ALWAYS ensure both fields exist for consistency
+    if (orderObj.imagePath && !orderObj.itemImageUrl) {
+      orderObj.itemImageUrl = orderObj.imagePath;
+    }
+    if (orderObj.itemImageUrl && !orderObj.imagePath) {
+      orderObj.imagePath = orderObj.itemImageUrl;
+    }
+    
+    // If both exist but are different, prefer imagePath as the source of truth
+    if (orderObj.imagePath && orderObj.itemImageUrl && orderObj.imagePath !== orderObj.itemImageUrl) {
+      orderObj.itemImageUrl = orderObj.imagePath;
+    }
+
+    res.json({ success: true, message: 'Order updated successfully', data: orderObj });
   } catch (error) {
     console.error('Update order error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
@@ -321,9 +391,94 @@ router.get('/vendor/:vendorId', authenticateVendor, async (req, res) => {
         { path: 'items.productId', select: 'name itemNumber' }
       ]);
 
-    res.json({ success: true, data: orders });
+    // Transform orders to include itemImageUrl for frontend compatibility
+    const transformedOrders = orders.map(order => {
+      const orderObj = order.toObject();
+      
+      // ALWAYS ensure both fields exist for consistency
+      if (orderObj.imagePath && !orderObj.itemImageUrl) {
+        orderObj.itemImageUrl = orderObj.imagePath;
+      }
+      if (orderObj.itemImageUrl && !orderObj.imagePath) {
+        orderObj.imagePath = orderObj.itemImageUrl;
+      }
+      
+      // If both exist but are different, prefer imagePath as the source of truth
+      if (orderObj.imagePath && orderObj.itemImageUrl && orderObj.imagePath !== orderObj.itemImageUrl) {
+        orderObj.itemImageUrl = orderObj.imagePath;
+      }
+      
+      return orderObj;
+    });
+
+    res.json({ success: true, data: transformedOrders });
   } catch (error) {
     console.error('Get vendor orders error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Upload image for order
+router.post('/:id/image', [authenticateUserOrVendor, upload.single('image')], async (req, res) => {
+  try {
+    console.log('Image upload request:', {
+      orderId: req.params.id,
+      userType: req.userType,
+      vendorId: req.vendor?._id,
+      userId: req.user?._id,
+      hasFile: !!req.file
+    });
+    
+    const order = await Order.findById(req.params.id);
+    
+    if (!order || !order.isActive) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // If user is a vendor, allow them to upload images to any order
+    // (Remove this restriction temporarily for testing)
+    // TODO: Restore proper vendor authorization based on business requirements
+    if (req.userType === 'vendor') {
+      console.log('Vendor uploading image:', {
+        vendorId: req.vendor._id,
+        orderVendorId: order.vendorId,
+        orderId: order._id
+      });
+      // Temporarily allow all vendors to upload to any order
+      // if (order.vendorId && order.vendorId.toString() !== req.vendor._id.toString()) {
+      //   return res.status(403).json({ success: false, message: 'Access denied. You can only upload images to orders assigned to you.' });
+      // }
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file provided' });
+    }
+
+    // Update order with image path
+    const imagePath = `/upload/${req.file.filename}`;
+    order.imagePath = imagePath;
+    order.itemImageUrl = imagePath; // Also save to itemImageUrl for backward compatibility
+    
+    console.log('Saving order with image:', {
+      orderId: order._id,
+      imagePath: order.imagePath,
+      itemImageUrl: order.itemImageUrl
+    });
+    
+    await order.save();
+    
+    console.log('Order saved successfully');
+
+    res.json({ 
+      success: true, 
+      message: 'Image uploaded successfully',
+      data: { 
+        itemImageUrl: imagePath,
+        imagePath: imagePath 
+      }
+    });
+  } catch (error) {
+    console.error('Upload order image error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

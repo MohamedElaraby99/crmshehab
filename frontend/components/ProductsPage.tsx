@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Product, ProductPurchase, User } from '../types';
-import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct } from '../services/api';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage } from '../services/api';
 import { createDemand } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
@@ -114,7 +114,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
       setProducts(allProducts);
 
       const imgMap: Record<string, string> = {};
-      (allOrders || []).forEach((order: any) => {
+      (allProducts || []).forEach((p: any) => {
+        if (Array.isArray(p.images) && p.images.length > 0) {
+          imgMap[p.id] = p.images[0];
+        }
+      });
+      // Fallback from recent order images if product lacks an image
+      ;(allOrders || []).forEach((order: any) => {
         if (!order?.itemImageUrl || !order?.items) return;
         order.items.forEach((it: any) => {
           const pid = it?.productId?.id;
@@ -304,6 +310,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Visible
                         </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
                         </th>
@@ -324,7 +331,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                             <div className="flex-shrink-0 h-10 w-10">
                               {productImageMap[product.id] ? (
                                 <img
-                                  src={`${getApiOrigin()}${productImageMap[product.id]}`}
+                                  src={`${getApiOrigin().replace(/\/api\/?$/, '')}${productImageMap[product.id]}`}
                                   alt={product.name}
                                   className="h-10 w-10 rounded object-cover border"
                                 />
@@ -372,6 +379,38 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                               >
                                 {((product as any).visibleToClients === false ? false : true) ? 'Make Hidden' : 'Make Visible'}
                               </button>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-2">
+                                {productImageMap[product.id] ? (
+                                  <img
+                                    src={`${getApiOrigin().replace(/\/api\/?$/, '')}${productImageMap[product.id]}`}
+                                    alt={product.name}
+                                    className="h-10 w-10 rounded object-cover border"
+                                  />
+                                ) : (
+                                  <div className="h-10 w-10 rounded bg-gray-100 border flex items-center justify-center text-xs text-gray-500">No image</div>
+                                )}
+                                <label className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">
+                                  Upload
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      const imgs = await uploadProductImage((product as any).id, file);
+                                      if (imgs && imgs.length > 0) {
+                                        await fetchData();
+                                      } else {
+                                        alert('Failed to upload image');
+                                      }
+                                      e.currentTarget.value = '';
+                                    }}
+                                  />
+                                </label>
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <div className="flex space-x-2">
@@ -436,7 +475,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                         <div className="h-12 w-12">
                           {productImageMap[product.id] ? (
                             <img
-                              src={`${getApiOrigin()}${productImageMap[product.id]}`}
+                              src={`${getApiOrigin().replace(/\/api\/?$/, '')}${productImageMap[product.id]}`}
                               alt={product.name}
                               className="h-12 w-12 rounded object-cover border"
                             />
@@ -633,6 +672,10 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
     onSave(productData);
   };
 
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type, checked } = e.target as HTMLInputElement;
     setFormData((prev) => ({
@@ -649,6 +692,47 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
             {product ? 'Edit Product' : 'Add New Product'}
           </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {product && (
+              <div className="mb-2">
+                <label className="block text-sm font-medium text-gray-700">Product Image</label>
+                <div className="flex items-center space-x-3 mt-1">
+                  {(previewUrl || (product as any)?.images?.[0]) ? (
+                    <img
+                      src={previewUrl || `${getApiOrigin().replace(/\/api\/?$/, '')}${(product as any)?.images?.[0]}`}
+                      alt={product.name}
+                      className="h-12 w-12 rounded object-cover border"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded bg-gray-100 border flex items-center justify-center text-xs text-gray-500">No image</div>
+                  )}
+                  <label className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">
+                    {uploading ? 'Uploading...' : 'Change Image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !product) return;
+                        setSelectedFile(file);
+                        const local = URL.createObjectURL(file);
+                        setPreviewUrl(local);
+                        setUploading(true);
+                        const imgs = await uploadProductImage(product.id, file);
+                        setUploading(false);
+                        if (imgs && imgs.length > 0) {
+                          // no-op; list will refresh on save/close
+                        } else {
+                          alert('Failed to upload image');
+                          setPreviewUrl(null);
+                        }
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700">Item Number</label>
               <input

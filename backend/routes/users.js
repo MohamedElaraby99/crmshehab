@@ -21,7 +21,6 @@ router.post('/', [
   requireAdmin,
   body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['admin', 'vendor', 'client']).withMessage('Invalid role'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -33,7 +32,7 @@ router.post('/', [
       });
     }
 
-    const { username, password, role } = req.body;
+    const { username, password } = req.body;
 
     // Check if username already exists
     const existingUser = await User.findOne({ username });
@@ -44,10 +43,11 @@ router.post('/', [
       });
     }
 
+    // Force new users to be created as 'client' only
     const user = new User({
       username,
       password,
-      role,
+      role: 'client',
     });
 
     await user.save();

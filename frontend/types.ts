@@ -57,6 +57,7 @@ export interface Product {
   itemNumber: string;
   name: string;
   description: string;
+  images?: string[];
   sellingPrice?: number;
   stock?: number;
   visibleToClients?: boolean;

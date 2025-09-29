@@ -96,12 +96,20 @@ router.post('/', [
   authenticateUser,
   requireAdmin,
   body('name').trim().isLength({ min: 1 }).withMessage('Name is required'),
-  body('contactPerson').trim().isLength({ min: 1 }).withMessage('Contact person is required'),
-  body('email').isEmail().withMessage('Valid email is required'),
-  body('phone').trim().isLength({ min: 1 }).withMessage('Phone is required'),
-  body('address').trim().isLength({ min: 1 }).withMessage('Address is required'),
-  body('city').trim().isLength({ min: 1 }).withMessage('City is required'),
-  body('country').trim().isLength({ min: 1 }).withMessage('Country is required')
+  body('contactPerson').optional().trim(),
+  body('email').optional().custom((value) => {
+    if (value && value.trim() !== '') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        throw new Error('Valid email format required');
+      }
+    }
+    return true;
+  }),
+  body('phone').optional().trim(),
+  body('address').optional().trim(),
+  body('city').optional().trim(),
+  body('country').optional().trim()
 ], async (req, res) => {
   try {
     console.log('Vendor creation request received:', req.body);
@@ -119,13 +127,15 @@ router.post('/', [
 
     const { name, contactPerson, email, phone, address, city, country, status = 'active' } = req.body;
 
-    // Check if email already exists
-    const existingVendor = await Vendor.findOne({ email });
-    if (existingVendor) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email already exists'
-      });
+    // Check if email already exists (only when provided)
+    if (email && email.trim() !== '') {
+      const existingVendor = await Vendor.findOne({ email });
+      if (existingVendor) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email already exists'
+        });
+      }
     }
 
     // Generate username and password
@@ -388,5 +398,89 @@ function generateSecurePassword() {
   // Shuffle the password
   return password.split('').sort(() => Math.random() - 0.5).join('');
 }
+
+// Update vendor credentials (username and password)
+router.put('/:id/credentials', [
+  authenticateUser,
+  requireAdmin,
+  body('username').optional().trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+], async (req, res) => {
+  try {
+    console.log('Update vendor credentials request:', { id: req.params.id, body: req.body });
+    
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const vendor = await Vendor.findById(req.params.id);
+    if (!vendor || !vendor.isActive) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vendor not found'
+      });
+    }
+
+    const updateData = {};
+    
+    // Update username if provided
+    if (req.body.username) {
+      // Check if username is already taken by another vendor
+      const existingVendor = await Vendor.findOne({ 
+        username: req.body.username, 
+        _id: { $ne: req.params.id },
+        isActive: true 
+      });
+      
+      if (existingVendor) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username is already taken'
+        });
+      }
+      
+      updateData.username = req.body.username;
+    }
+    
+    // Update password if provided
+    if (req.body.password) {
+      updateData.password = req.body.password;
+    }
+    
+    // If no updates provided
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid updates provided'
+      });
+    }
+
+    // Update the vendor
+    const updatedVendor = await Vendor.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-password'); // Don't return password in response
+
+    console.log('Vendor credentials updated successfully');
+    
+    res.json({
+      success: true,
+      message: 'Vendor credentials updated successfully',
+      data: updatedVendor
+    });
+  } catch (error) {
+    console.error('Update vendor credentials error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
 
 module.exports = router;

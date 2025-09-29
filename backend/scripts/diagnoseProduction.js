@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const PRODUCTION_API_URL = 'https://api.crm.fikra.solutions/api';
+const PRODUCTION_API_URL = 'https://api.crm.fikra.solutions/api' || 'http://localhost:3000/api';
 
 async function diagnoseProduction() {
   console.log('🔍 Diagnosing Production Server Issues...\n');

@@ -352,9 +352,14 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             </tr>
           </thead>
           <tbody>
-            {numberedOrders.map((order, index) => (
+            {numberedOrders.map((order, index) => {
+              // Debug logging for key issues
+              if (!order.id) {
+                console.warn('Order missing ID:', order, 'index:', index);
+              }
+              return (
               <OrderRow 
-                key={order.id} 
+                key={order.id || `order-${index}`} 
                 order={order} 
                 onUpdate={onUpdateOrder || (() => {})}
                 onDelete={onDeleteOrder || (() => {})}
@@ -366,7 +371,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                 columns={columns}
                 isEven={index % 2 === 0}
               />
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

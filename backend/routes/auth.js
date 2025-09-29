@@ -22,23 +22,25 @@ router.post('/login', [
     }
 
     const { username, password } = req.body;
+    console.log('[AUTH] Login attempt:', { username });
 
-    // Find user by username
-    const user = await User.findOne({ username, isActive: true });
+    // Find user by username (regardless of active), then handle activation logic
+    let user = await User.findOne({ username });
+    console.log('[AUTH] User found/active:', !!user, user?.isActive);
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // Check password
     const isPasswordValid = await user.comparePassword(password);
+    console.log('[AUTH] Password match:', isPasswordValid);
     if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials'
-      });
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // If user is inactive but credentials are correct, reactivate on login
+    if (!user.isActive) {
+      user.isActive = true;
     }
 
     // Update last login

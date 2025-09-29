@@ -14,7 +14,7 @@ const defaultAdmin = {
 async function createAdminUser(username, password, options = {}) {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/crm_test_auth');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/crm_suppliers');
     console.log('✅ Connected to MongoDB');
 
     // Check if user already exists

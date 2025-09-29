@@ -1,0 +1,24 @@
+{
+  "watch": [
+    "server.js",
+    "start.js",
+    "routes",
+    "models",
+    "middleware",
+    "scripts"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules",
+    "upload",
+    "*.log",
+    ".git",
+    "package-lock.json"
+  ],
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "exec": "node server.js"
+}
+
+

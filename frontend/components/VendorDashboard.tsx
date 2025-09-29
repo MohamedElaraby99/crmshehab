@@ -34,6 +34,10 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
       setVendor(vendorData || user);
       setOrders(vendorOrders);
       setAllOrders(allOrdersData);
+      
+      // Debug logging
+      console.log('Vendor Dashboard - Orders received:', vendorOrders);
+      console.log('First order image data:', vendorOrders[0]?.itemImageUrl, vendorOrders[0]?.imagePath);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
     } finally {

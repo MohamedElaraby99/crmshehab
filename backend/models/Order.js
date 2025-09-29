@@ -104,6 +104,16 @@ const orderSchema = new mongoose.Schema({
     trim: true,
     maxlength: 1000
   },
+  imagePath: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
+  itemImageUrl: {
+    type: String,
+    trim: true,
+    maxlength: 500
+  },
   orderDate: {
     type: Date,
     default: Date.now

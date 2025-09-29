@@ -330,6 +330,12 @@ const OrderRow: React.FC<OrderRowProps> = ({
   const getCellValue = (columnKey: string) => {
     switch (columnKey) {
       case 'itemImage':
+        console.log('OrderRow - Image data for order:', order.id, {
+          itemImageUrl: editableOrder.itemImageUrl,
+          imagePath: editableOrder.imagePath,
+          originalItemImageUrl: order.itemImageUrl,
+          originalImagePath: order.imagePath
+        });
         return editableOrder.itemImageUrl || '';
       case 'itemNumber':
         return firstItem?.itemNumber || 'N/A';
@@ -502,13 +508,13 @@ const OrderRow: React.FC<OrderRowProps> = ({
               <div className="flex items-center justify-center space-x-2">
           {editableOrder.itemImageUrl ? (
             <a
-              href={`${getApiOrigin()}${editableOrder.itemImageUrl}`}
+              href={`${getApiOrigin().replace(/\/api\/?$/, '')}${editableOrder.itemImageUrl}`}
               target="_blank"
               rel="noreferrer"
               title="Open full image"
             >
               <img
-                src={`${getApiOrigin()}${editableOrder.itemImageUrl}`}
+                src={`${getApiOrigin().replace(/\/api\/?$/, '')}${editableOrder.itemImageUrl}`}
                 alt="Item"
                 className="w-10 h-10 object-cover rounded border"
               />
@@ -538,7 +544,9 @@ const OrderRow: React.FC<OrderRowProps> = ({
                   try {
                     const updated = await uploadOrderImage(editableOrder.id, file);
                     if (updated) {
+                      const updatedOrder = { ...editableOrder, itemImageUrl: updated.itemImageUrl };
                       setEditableOrder(prev => ({ ...prev, itemImageUrl: updated.itemImageUrl }));
+                      onUpdate(updatedOrder); // Notify parent component to refresh
                     }
                   } catch (err) {
                     console.error(err);

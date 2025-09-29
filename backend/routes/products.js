@@ -1,5 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const multer = require('multer');
+const path = require('path');
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Vendor = require('../models/Vendor');
@@ -8,6 +10,28 @@ const Order = require('../models/Order');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Multer storage for product images (reuses /upload static dir)
+const productStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, path.join(__dirname, '..', 'upload'));
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '');
+    cb(null, `${Date.now()}-${base}${ext}`);
+  }
+});
+
+const productUpload = multer({
+  storage: productStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPG, PNG, WEBP allowed'));
+  }
+});
 
 // Helper to compute stock from confirmed orders (without mutating DB)
 const computeStockFromConfirmed = async (productId) => {
@@ -550,3 +574,33 @@ router.get('/:id/statistics', authenticateUser, async (req, res) => {
 });
 
 module.exports = router;
+// Upload product image
+router.post('/:id/image', [authenticateUser, requireAdmin, productUpload.single('image')], async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file provided' });
+    }
+
+    const product = await Product.findById(req.params.id);
+    if (!product || !product.isActive) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    const imagePath = `/upload/${req.file.filename}`;
+    // Prepend to images array; ensure it exists
+    const images = Array.isArray(product.images) ? product.images : [];
+    images.unshift(imagePath);
+
+    product.images = images;
+    await product.save();
+
+    res.json({
+      success: true,
+      message: 'Image uploaded successfully',
+      data: { images: product.images }
+    });
+  } catch (error) {
+    console.error('Upload product image error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});

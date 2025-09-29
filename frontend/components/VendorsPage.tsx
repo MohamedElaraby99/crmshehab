@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Vendor } from '../types';
-import { getAllVendors, createVendor, updateVendor, deleteVendor } from '../services/api';
+import { getAllVendors, createVendor, updateVendor, deleteVendor, updateVendorCredentials } from '../services/api';
 
 interface VendorsPageProps {
   onLogout: () => void;
@@ -76,6 +76,22 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
       } catch (error) {
         console.error('Failed to delete vendor:', error);
       }
+    }
+  };
+
+  const handleUpdateCredentials = async (vendorId: string, credentials: { username?: string; password?: string }) => {
+    try {
+      console.log('Updating vendor credentials:', vendorId, credentials);
+      const updated = await updateVendorCredentials(vendorId, credentials);
+      if (updated) {
+        console.log('Credentials updated successfully');
+        await fetchVendors(); // Refresh the vendor list
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to update vendor credentials:', error);
+      return false;
     }
   };
 
@@ -264,6 +280,7 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
         <CredentialsModal
           vendor={showCredentials}
           onClose={() => setShowCredentials(null)}
+          onUpdateCredentials={handleUpdateCredentials}
         />
       )}
     </div>
@@ -367,7 +384,6 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
                 name="contactPerson"
                 value={formData.contactPerson}
                 onChange={handleChange}
-                required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -378,7 +394,6 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -389,7 +404,6 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
-                required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -400,7 +414,6 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
-                required
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
@@ -412,7 +425,6 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
-                  required
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -423,7 +435,6 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
-                  required
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -466,14 +477,87 @@ const VendorModal: React.FC<VendorModalProps> = ({ vendor, onSave, onClose }) =>
 interface CredentialsModalProps {
   vendor: Vendor;
   onClose: () => void;
+  onUpdateCredentials: (vendorId: string, credentials: { username?: string; password?: string }) => Promise<boolean>;
 }
 
-const CredentialsModal: React.FC<CredentialsModalProps> = ({ vendor, onClose }) => {
+const CredentialsModal: React.FC<CredentialsModalProps> = ({ vendor, onClose, onUpdateCredentials }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({
+    username: vendor.username,
+    password: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     // You could add a toast notification here
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    setEditData({
+      username: vendor.username,
+      password: ''
+    });
+    setMessage(null);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setEditData({
+      username: vendor.username,
+      password: ''
+    });
+    setMessage(null);
+  };
+
+  const handleSave = async () => {
+    if (!editData.username.trim()) {
+      setMessage({ type: 'error', text: 'Username is required' });
+      return;
+    }
+
+    if (editData.password && editData.password.length < 6) {
+      setMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      const credentials: { username?: string; password?: string } = {};
+      
+      if (editData.username !== vendor.username) {
+        credentials.username = editData.username;
+      }
+      
+      if (editData.password) {
+        credentials.password = editData.password;
+      }
+
+      if (Object.keys(credentials).length === 0) {
+        setMessage({ type: 'error', text: 'No changes to save' });
+        setLoading(false);
+        return;
+      }
+
+      const success = await onUpdateCredentials(vendor.id, credentials);
+      
+      if (success) {
+        setMessage({ type: 'success', text: 'Credentials updated successfully!' });
+        setIsEditing(false);
+        setEditData({ username: editData.username, password: '' });
+      } else {
+        setMessage({ type: 'error', text: 'Failed to update credentials' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to update credentials' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -503,23 +587,51 @@ const CredentialsModal: React.FC<CredentialsModalProps> = ({ vendor, onClose }) 
             </div>
 
             <div className="bg-green-50 p-4 rounded-lg">
-              <h4 className="text-sm font-medium text-green-800 mb-2">Login Credentials</h4>
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-sm font-medium text-green-800">Login Credentials</h4>
+                {!isEditing && (
+                  <button
+                    onClick={handleEdit}
+                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+              
+              {message && (
+                <div className={`mb-3 p-2 rounded text-xs ${
+                  message.type === 'success' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  {message.text}
+                </div>
+              )}
+              
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-green-700 mb-1">Username</label>
                   <div className="flex items-center space-x-2">
                     <input
                       type="text"
-                      value={vendor.username}
-                      readOnly
-                      className="flex-1 px-3 py-2 border border-green-300 rounded-md bg-white text-sm font-mono"
+                      value={isEditing ? editData.username : vendor.username}
+                      readOnly={!isEditing}
+                      onChange={isEditing ? (e) => setEditData({...editData, username: e.target.value}) : undefined}
+                      className={`flex-1 px-3 py-2 border rounded-md text-sm font-mono ${
+                        isEditing 
+                          ? 'border-green-400 bg-white focus:ring-2 focus:ring-green-500' 
+                          : 'border-green-300 bg-white'
+                      }`}
                     />
-                    <button
-                      onClick={() => copyToClipboard(vendor.username)}
-                      className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-                    >
-                      Copy
-                    </button>
+                    {!isEditing && (
+                      <button
+                        onClick={() => copyToClipboard(vendor.username)}
+                        className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                      >
+                        Copy
+                      </button>
+                    )}
                   </div>
                 </div>
                 
@@ -527,26 +639,62 @@ const CredentialsModal: React.FC<CredentialsModalProps> = ({ vendor, onClose }) 
                   <label className="block text-xs font-medium text-green-700 mb-1">Password</label>
                   <div className="flex items-center space-x-2">
                     <input
-                      type={showPassword ? "text" : "password"}
-                      value={vendor.password}
-                      readOnly
-                      className="flex-1 px-3 py-2 border border-green-300 rounded-md bg-white text-sm font-mono"
+                      type={isEditing ? "password" : (showPassword ? "text" : "password")}
+                      value={isEditing ? editData.password : vendor.password}
+                      readOnly={!isEditing}
+                      onChange={isEditing ? (e) => setEditData({...editData, password: e.target.value}) : undefined}
+                      placeholder={isEditing ? "Enter new password (leave blank to keep current)" : ""}
+                      className={`flex-1 px-3 py-2 border rounded-md text-sm font-mono ${
+                        isEditing 
+                          ? 'border-green-400 bg-white focus:ring-2 focus:ring-green-500' 
+                          : 'border-green-300 bg-white'
+                      }`}
                     />
-                    <button
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
-                    >
-                      {showPassword ? 'Hide' : 'Show'}
-                    </button>
-                    <button
-                      onClick={() => copyToClipboard(vendor.password)}
-                      className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-                    >
-                      Copy
-                    </button>
+                    {!isEditing ? (
+                      <>
+                        <button
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="px-2 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
+                        >
+                          {showPassword ? 'Hide' : 'Show'}
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(vendor.password)}
+                          className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                        >
+                          Copy
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setEditData({...editData, password: ''})}
+                        className="px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                        title="Clear password"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
+              
+              {isEditing && (
+                <div className="flex justify-end space-x-2 mt-4">
+                  <button
+                    onClick={handleCancel}
+                    className="px-3 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={loading}
+                    className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {loading ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="bg-yellow-50 p-4 rounded-lg">
