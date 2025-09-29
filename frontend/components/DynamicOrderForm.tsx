@@ -12,6 +12,14 @@ interface DynamicOrderFormProps {
   externalFieldConfigs?: OrderFieldConfig[];
 }
 
+interface OrderItem {
+  id: string;
+  itemNumber: string;
+  productName: string;
+  quantity: number;
+  unitPrice?: number;
+}
+
 const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   order,
   vendors,
@@ -25,6 +33,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [fieldConfigs, setFieldConfigs] = useState<OrderFieldConfig[]>(ORDER_FIELD_CONFIGS);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
 
   // Load field configurations
   useEffect(() => {
@@ -55,13 +64,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   useEffect(() => {
     if (order) {
       // Load existing order data
-      // Extract data from first item for form initialization
-      const firstItem = order.items && order.items[0] ? order.items[0] : null;
       const initialData: Record<string, any> = {
-        itemNumber: firstItem?.itemNumber || '',
-        productName: firstItem?.productId?.name || '',
-        quantity: firstItem?.quantity || 1,
-        price: firstItem?.unitPrice || 0,
         vendorId: typeof order.vendorId === 'string' ? order.vendorId : order.vendorId?._id || '',
         confirmFormShehab: formatDateForInput(order.confirmFormShehab),
         estimatedDateReady: formatDateForInput(order.estimatedDateReady),
@@ -74,13 +77,21 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         status: order.status || 'pending'
       };
       setFormData(initialData);
+
+      // Load existing items
+      if (order.items && order.items.length > 0) {
+        const items = order.items.map((item, index) => ({
+          id: `item-${index}`,
+          itemNumber: item.itemNumber || '',
+          productName: typeof item.productId === 'object' ? item.productId?.name || '' : '',
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || 0
+        }));
+        setOrderItems(items);
+      }
     } else {
       // Initialize with defaults for new order
       const initialData: Record<string, any> = {
-        itemNumber: '',
-        productName: '',
-        quantity: 1,
-        price: 0,
         vendorId: '',
         confirmFormShehab: '',
         estimatedDateReady: '',
@@ -93,6 +104,15 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         status: 'pending'
       };
       setFormData(initialData);
+      
+      // Start with one empty item
+      setOrderItems([{
+        id: 'item-0',
+        itemNumber: '',
+        productName: '',
+        quantity: 1,
+        unitPrice: 0
+      }]);
     }
   }, [order]);
 
@@ -117,6 +137,29 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         [fieldName]: ''
       }));
     }
+  };
+
+  const addItem = () => {
+    const newItem: OrderItem = {
+      id: `item-${Date.now()}`,
+      itemNumber: '',
+      productName: '',
+      quantity: 1,
+      unitPrice: 0
+    };
+    setOrderItems(prev => [...prev, newItem]);
+  };
+
+  const removeItem = (itemId: string) => {
+    if (orderItems.length > 1) {
+      setOrderItems(prev => prev.filter(item => item.id !== itemId));
+    }
+  };
+
+  const updateItem = (itemId: string, field: keyof OrderItem, value: any) => {
+    setOrderItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, [field]: value } : item
+    ));
   };
 
   const validateField = (field: OrderFieldConfig, value: any): string => {
@@ -164,6 +207,22 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
       }
     });
 
+    // Validate order items
+    orderItems.forEach((item, index) => {
+      if (!item.itemNumber.trim()) {
+        newErrors[`item_${index}_itemNumber`] = 'Item number is required';
+        isValid = false;
+      }
+      if (!item.productName.trim()) {
+        newErrors[`item_${index}_productName`] = 'Product name is required';
+        isValid = false;
+      }
+      if (!item.quantity || item.quantity <= 0) {
+        newErrors[`item_${index}_quantity`] = 'Quantity must be greater than 0';
+        isValid = false;
+      }
+    });
+
     setErrors(newErrors);
     return isValid;
   };
@@ -197,27 +256,25 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         return;
       }
 
-      // Find the product by selected ID or item number
-      const selectedProduct = selectedProductId 
-        ? products.find(p => p.id === selectedProductId || (p as any)._id === selectedProductId)
-        : products.find(p => p.itemNumber === formData.itemNumber);
-      
-      if (!selectedProduct) {
-        setErrors(prev => ({ ...prev, itemNumber: 'Please select a product from the list or enter a valid item number.' }));
-        return;
-      }
+      // Prepare items array
+      const items = orderItems.map(item => {
+        // Try to find existing product by item number
+        const existingProduct = products.find(p => p.itemNumber === item.itemNumber);
+        const productId = existingProduct ? ((existingProduct as any).id || (existingProduct as any)._id) : null;
+        
+        return {
+          productId: productId || item.itemNumber, // Fallback to itemNumber if product not found
+          itemNumber: item.itemNumber,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice || 0
+        };
+      });
 
       // Admin creates/updates full order (vendor fills price/confirm later)
-      const selectedProductIdFinal = (selectedProduct as any).id || (selectedProduct as any)._id;
-
       orderData = {
         orderNumber: order?.orderNumber || `ORD-${String(Date.now()).slice(-6)}`,
         vendorId: formData.vendorId,
-        items: [{
-          productId: selectedProductIdFinal,
-          itemNumber: formData.itemNumber,
-          quantity: formData.quantity
-        }],
+        items: items,
         status: formData.status,
         ...formData
       };
@@ -226,47 +283,35 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
       if (orderData.price !== undefined) delete orderData.price;
       if (orderData.confirmFormShehab !== undefined) delete orderData.confirmFormShehab;
       if (orderData.totalAmount !== undefined) delete orderData.totalAmount;
-      if (orderData.items && orderData.items[0]) {
-        if (orderData.items[0].unitPrice !== undefined) delete orderData.items[0].unitPrice;
-        if (orderData.items[0].totalPrice !== undefined) delete orderData.items[0].totalPrice;
-      }
 
       // Backend compatibility: some environments still expect supplierId and numeric prices
-      // Mirror vendorId to supplierId and set zero prices if missing
       (orderData as any).supplierId = orderData.vendorId;
-      if (orderData.items && orderData.items[0]) {
-        if (orderData.items[0].unitPrice === undefined) orderData.items[0].unitPrice = 0;
-        if (orderData.items[0].totalPrice === undefined) orderData.items[0].totalPrice = 0;
-      }
       if (orderData.totalAmount === undefined) orderData.totalAmount = 0;
 
       console.log('DynamicOrderForm: Sending order data to backend', orderData);
     } else {
       // Vendor updates only their fields
-      const quantity = Number(formData.quantity) || 0;
-      const unitPrice = Number(formData.price) || 0;
-      const computedTotal = quantity * unitPrice;
+      const items = orderItems.map(item => {
+        const unitPrice = item.unitPrice || 0;
+        const totalPrice = item.quantity * unitPrice;
+        
+        return {
+          productId: item.itemNumber, // Use itemNumber as fallback
+          itemNumber: item.itemNumber,
+          quantity: item.quantity,
+          unitPrice: unitPrice,
+          totalPrice: totalPrice
+        };
+      });
+
+      const totalAmount = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
 
       orderData = {
         id: order?.id,
+        items: items,
+        totalAmount: totalAmount,
         ...formData
       };
-
-      // Ensure nested items and totals are updated
-      if (order && order.items && order.items[0]) {
-        const firstItem = order.items[0];
-        orderData.items = [
-          {
-            productId: (firstItem.productId as any)?.id || (firstItem.productId as any)?._id || firstItem.productId,
-            itemNumber: firstItem.itemNumber,
-            quantity,
-            unitPrice,
-            totalPrice: computedTotal
-          }
-        ];
-      }
-
-      orderData.totalAmount = computedTotal;
     }
 
     // Ensure we have an ID for updates
@@ -441,50 +486,125 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h4 className="text-sm font-medium text-blue-900 mb-3">Admin Fields (You Fill)</h4>
                 
-                {/* Product Selection */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Product
-                  </label>
-                  <select
-                    value={selectedProductId}
-                    onChange={(e) => {
-                      setSelectedProductId(e.target.value);
-                      const product = products.find(p => p.id === e.target.value);
-                      if (product) {
-                        setFormData(prev => ({
-                          ...prev,
-                          itemNumber: product.itemNumber,
-                          productName: product.name
-                        }));
-                      }
-                    }}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select a product...</option>
-                    {products.map(product => (
-                      <option key={product.id} value={product.id}>
-                        {product.itemNumber} - {product.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Or enter the item number manually below
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   {visibleFields
                     .filter(field => field.editableBy === 'admin')
                     .filter(field => field.name !== 'price')
                     .filter(field => field.name !== 'confirmFormShehab')
+                    .filter(field => field.name !== 'itemNumber' && field.name !== 'productName' && field.name !== 'quantity')
                     .map(field => renderField(field))}
+                </div>
+
+                {/* Invoice Items Section */}
+                <div className="mt-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h5 className="text-sm font-medium text-gray-900">Order Items</h5>
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Item
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {orderItems.map((item, index) => (
+                      <div key={item.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                          <div className="md:col-span-3">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Item Number *
+                            </label>
+                            <input
+                              type="text"
+                              value={item.itemNumber}
+                              onChange={(e) => updateItem(item.id, 'itemNumber', e.target.value)}
+                              className={`w-full px-3 py-2 border rounded-md text-sm ${
+                                errors[`item_${index}_itemNumber`] 
+                                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                              }`}
+                              placeholder="Enter item number"
+                            />
+                            {errors[`item_${index}_itemNumber`] && (
+                              <p className="text-xs text-red-600 mt-1">{errors[`item_${index}_itemNumber`]}</p>
+                            )}
+                          </div>
+
+                          <div className="md:col-span-5">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Product Name *
+                            </label>
+                            <input
+                              type="text"
+                              value={item.productName}
+                              onChange={(e) => updateItem(item.id, 'productName', e.target.value)}
+                              className={`w-full px-3 py-2 border rounded-md text-sm ${
+                                errors[`item_${index}_productName`] 
+                                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                              }`}
+                              placeholder="Enter product name"
+                            />
+                            {errors[`item_${index}_productName`] && (
+                              <p className="text-xs text-red-600 mt-1">{errors[`item_${index}_productName`]}</p>
+                            )}
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Quantity *
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                              className={`w-full px-3 py-2 border rounded-md text-sm ${
+                                errors[`item_${index}_quantity`] 
+                                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                              }`}
+                            />
+                            {errors[`item_${index}_quantity`] && (
+                              <p className="text-xs text-red-600 mt-1">{errors[`item_${index}_quantity`]}</p>
+                            )}
+                          </div>
+
+                          <div className="md:col-span-1">
+                            <button
+                              type="button"
+                              onClick={() => removeItem(item.id)}
+                              disabled={orderItems.length === 1}
+                              className={`w-full p-2 rounded-md text-sm font-medium ${
+                                orderItems.length === 1
+                                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                  : 'bg-red-100 text-red-600 hover:bg-red-200'
+                              }`}
+                            >
+                              <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 text-sm text-gray-600">
+                    Total Items: {orderItems.length} | Total Quantity: {orderItems.reduce((sum, item) => sum + item.quantity, 0)}
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Vendor Fields */}
-            <div className="bg-green-50 p-4 rounded-lg">
+            {/* <div className="bg-green-50 p-4 rounded-lg">
               <h4 className="text-sm font-medium text-green-900 mb-3">
                 {userRole === 'admin' ? 'Vendor Fields (Vendor Will Fill)' : 'Your Fields (You Can Edit)'}
               </h4>
@@ -493,7 +613,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                   .filter(field => field.editableBy === 'vendor')
                   .map(field => renderField(field))}
               </div>
-            </div>
+            </div> */}
 
             {/* Shared Fields */}
             {visibleFields.some(field => field.editableBy === 'both') && (

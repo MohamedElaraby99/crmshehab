@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Order, Vendor, Product } from '../types';
-import { getAllOrders, createOrder, updateOrder, deleteOrder, getAllVendors, getAllProducts, getAllFieldConfigs, FieldConfig } from '../services/api';
+import { getAllOrders, createOrder, updateOrder, deleteOrder, getAllVendors, getAllProducts, getAllFieldConfigs, FieldConfig, createProduct, updateProduct, uploadProductImage, getApiOrigin } from '../services/api';
 import DynamicOrderForm from './DynamicOrderForm';
 import FieldConfigManager from './FieldConfigManager';
 import { OrderFieldConfig } from '../data/orderFieldConfig';
@@ -10,6 +11,7 @@ interface OrdersPageProps {
 }
 
 const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -17,6 +19,8 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -157,6 +161,31 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
     }
   };
 
+  const handleCreateProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const created = await createProduct(productData as any);
+      if (created) {
+        await fetchData();
+        setShowProductModal(false);
+      }
+    } catch (error) {
+      console.error('Failed to create product:', error);
+    }
+  };
+
+  const handleUpdateProduct = async (productData: Product) => {
+    try {
+      const updated = await updateProduct(productData.id, productData);
+      if (updated) {
+        await fetchData();
+        setShowProductModal(false);
+        setEditingProduct(null);
+      }
+    } catch (error) {
+      console.error('Failed to update product:', error);
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-center">Loading orders...</div>;
   }
@@ -171,6 +200,12 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
           </div>
           <div className="flex items-center space-x-4">
             <FieldConfigManager onConfigChange={handleFieldConfigChange} />
+            <button
+              onClick={() => setShowProductModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              Add Product
+            </button>
             <button
               onClick={() => setShowModal(true)}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -337,9 +372,189 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
           }}
         />
       )}
+
+      {/* Product Modal */}
+      {showProductModal && (
+        <ProductModal
+          product={editingProduct}
+          onSave={editingProduct ? handleUpdateProduct : handleCreateProduct}
+          onClose={() => {
+            setShowProductModal(false);
+            setEditingProduct(null);
+          }}
+        />
+      )}
     </div>
   );
 };
 
+// Product Modal Component
+interface ProductModalProps {
+  product: Product | null;
+  onSave: (product: any) => void;
+  onClose: () => void;
+}
+
+const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose }) => {
+  const [formData, setFormData] = useState({
+    itemNumber: product?.itemNumber || '',
+    name: product?.name || '',
+    description: product?.description || '',
+    sellingPrice: (product as any)?.sellingPrice as number | undefined ?? undefined,
+    stock: (product as any)?.stock as number | undefined ?? undefined,
+    visibleToClients: (product as any)?.visibleToClients as boolean | undefined ?? true,
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const productData: any = {
+      itemNumber: formData.itemNumber,
+      name: formData.name,
+      description: formData.description,
+    };
+    if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
+      productData.sellingPrice = formData.sellingPrice;
+    }
+    productData.visibleToClients = !!formData.visibleToClients;
+    if (product) {
+      productData.id = product.id;
+    }
+    onSave(productData);
+  };
+
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type, checked } = e.target as HTMLInputElement;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'number' ? (value === '' ? undefined : parseFloat(value)) : (type === 'checkbox' ? checked : value)
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-10 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            {product ? 'Edit Product' : 'Add New Product'}
+          </h3>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {product && (
+              <div className="mb-2">
+                <label className="block text-sm font-medium text-gray-700">Product Image</label>
+                <div className="flex items-center space-x-3 mt-1">
+                  {(previewUrl || (product as any)?.images?.[0]) ? (
+                    <img
+                      src={previewUrl || `${getApiOrigin().replace(/\/api\/?$/, '')}${(product as any)?.images?.[0]}`}
+                      alt={product.name}
+                      className="h-12 w-12 rounded object-cover border"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded bg-gray-100 border flex items-center justify-center text-xs text-gray-500">No image</div>
+                  )}
+                  <label className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">
+                    {uploading ? 'Uploading...' : 'Change Image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file || !product) return;
+                        const local = URL.createObjectURL(file);
+                        setPreviewUrl(local);
+                        setUploading(true);
+                        const imgs = await uploadProductImage(product.id, file);
+                        setUploading(false);
+                        if (imgs && imgs.length > 0) {
+                          // no-op; list will refresh on save/close
+                        } else {
+                          alert('Failed to upload image');
+                          setPreviewUrl(null);
+                        }
+                        e.currentTarget.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Item Number</label>
+              <input
+                name="itemNumber"
+                className="mt-1 block w-full border rounded px-3 py-2"
+                value={formData.itemNumber}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <input
+                name="name"
+                className="mt-1 block w-full border rounded px-3 py-2"
+                value={formData.name}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <textarea
+                name="description"
+                className="mt-1 block w-full border rounded px-3 py-2"
+                value={formData.description}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Selling Price</label>
+              <input
+                name="sellingPrice"
+                type="number"
+                step="0.01"
+                min="0"
+                className="mt-1 block w-full border rounded px-3 py-2"
+                value={typeof formData.sellingPrice === 'number' ? String(formData.sellingPrice) : ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Stock</label>
+              <input
+                name="stock"
+                type="number"
+                step="1"
+                min="0"
+                className="mt-1 block w-full border rounded px-3 py-2"
+                value={typeof formData.stock === 'number' ? String(formData.stock) : ''}
+                onChange={handleChange}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                id="visibleToClients"
+                name="visibleToClients"
+                type="checkbox"
+                checked={!!formData.visibleToClients}
+                onChange={handleChange}
+                className="h-4 w-4"
+              />
+              <label htmlFor="visibleToClients" className="text-sm font-medium text-gray-700">Visible to Clients</label>
+            </div>
+            <div className="flex justify-end space-x-2 pt-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded border">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-green-600 text-white">Save Product</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default OrdersPage;
