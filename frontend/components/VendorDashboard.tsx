@@ -176,6 +176,7 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
               onDeleteOrder={handleDeleteOrder}
               onViewHistory={handleViewHistory}
               userIsAdmin={false}
+              currencySymbol={"¥"}
             />
           </div>
         </div>

@@ -8,6 +8,110 @@ const ProductPurchase = require('../models/ProductPurchase');
 const { authenticateUser, authenticateVendor, authenticateUserOrVendor } = require('../middleware/auth');
 
 const router = express.Router();
+// Transfer a quantity from an order item into a new order
+router.post('/:id/items/:itemIndex/transfer', [
+  authenticateVendor,
+  body('transferQuantity').isInt({ min: 1 }).withMessage('transferQuantity must be >= 1'),
+  body('newOrder').optional().isObject().withMessage('newOrder must be an object')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order || !order.isActive) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Vendor authorization: allow vendor to transfer only within their orders
+    if (order.vendorId && String(order.vendorId) !== String(req.vendor._id)) {
+      return res.status(403).json({ success: false, message: 'Access denied for this order' });
+    }
+
+    const itemIndex = parseInt(req.params.itemIndex, 10);
+    if (Number.isNaN(itemIndex) || itemIndex < 0 || itemIndex >= (order.items?.length || 0)) {
+      return res.status(400).json({ success: false, message: 'Invalid item index' });
+    }
+
+    const srcItem = order.items[itemIndex];
+    if (!srcItem) return res.status(404).json({ success: false, message: 'Item not found' });
+
+    const transferQty = typeof req.body.transferQuantity === 'string' ? parseInt(req.body.transferQuantity, 10) : req.body.transferQuantity;
+    if (transferQty > (srcItem.quantity || 0)) {
+      return res.status(400).json({ success: false, message: 'Transfer quantity exceeds item quantity' });
+    }
+
+    // Reduce source item quantity (or remove if zero)
+    order.items[itemIndex].quantity = (srcItem.quantity || 0) - transferQty;
+    if (order.items[itemIndex].quantity === 0) {
+      order.items.splice(itemIndex, 1);
+    }
+
+    // Prepare new order payload
+    const nowSuffix = String(Date.now()).slice(-6);
+    const newOrderNumber = `ORD-${nowSuffix}`;
+    const newItem = {
+      productId: srcItem.productId,
+      itemNumber: srcItem.itemNumber,
+      quantity: transferQty,
+      unitPrice: srcItem.unitPrice,
+      totalPrice: typeof srcItem.unitPrice === 'number' ? srcItem.unitPrice * transferQty : undefined,
+      status: 'pending',
+      notes: srcItem.notes,
+      estimatedDateReady: srcItem.estimatedDateReady,
+      confirmFormShehab: srcItem.confirmFormShehab,
+      invoiceNumber: undefined,
+      transferAmount: undefined
+    };
+
+    const newOrderPayload = req.body.newOrder || {};
+    const newOrder = await Order.create({
+      orderNumber: newOrderNumber,
+      vendorId: order.vendorId,
+      items: [newItem],
+      status: 'pending',
+      notes: newOrderPayload.notes || '',
+      shippingAddress: newOrderPayload.shippingAddress || {},
+      expectedDeliveryDate: newOrderPayload.expectedDeliveryDate || undefined,
+      confirmFormShehab: newOrderPayload.confirmFormShehab || undefined,
+      price: newOrderPayload.price || undefined
+    });
+
+    // Save updated source order
+    await order.save();
+
+    // Fetch populated versions
+    const updatedOrder = await Order.findById(order._id).populate([
+      { path: 'vendorId', select: 'name' },
+      { path: 'items.productId', select: 'name itemNumber' }
+    ]);
+    const createdOrder = await Order.findById(newOrder._id).populate([
+      { path: 'vendorId', select: 'name' },
+      { path: 'items.productId', select: 'name itemNumber' }
+    ]);
+
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('orders:updated', { id: String(order._id) });
+        io.emit('orders:created', { id: String(newOrder._id) });
+        io.emit('notifications:push', {
+          type: 'item_transferred',
+          orderId: order._id,
+          message: `Transferred ${transferQty} of ${srcItem.itemNumber} to ${newOrderNumber}`,
+          at: new Date().toISOString()
+        });
+      }
+    } catch {}
+
+    return res.status(201).json({ success: true, data: { updatedOrder, newOrder: createdOrder } });
+  } catch (error) {
+    console.error('Transfer item quantity error:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
 
 // Multer storage for order item images
 const storage = multer.diskStorage({

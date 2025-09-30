@@ -10,10 +10,11 @@ interface OrderTableProps {
   onDeleteOrder?: (orderId: string) => void;
   onViewHistory?: (itemNumber: string) => void;
   userIsAdmin: boolean;
+  currencySymbol?: string;
 }
 
-const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDeleteOrder, onViewHistory, userIsAdmin }) => {
-  const currencySymbol = userIsAdmin ? '¥' : 'SR ';
+const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDeleteOrder, onViewHistory, userIsAdmin, currencySymbol: currencySymbolOverride }) => {
+  const currencySymbol = currencySymbolOverride ?? (userIsAdmin ? '¥' : 'SR ');
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -420,31 +421,33 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             )}
           </div>
           
-          {/* Vendor filter */}
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Vendor:</span>
-            <select
-              value={selectedVendor}
-              onChange={(e) => setSelectedVendor(e.target.value)}
-              className="text-xs border border-gray-300 rounded px-2 py-1 bg-white min-w-40"
-            >
-              <option value="all">All Vendors</option>
-              {uniqueVendors.map(vendor => (
-                <option key={`${vendor.id}-${vendor.name}`} value={vendor.id}>
-                  {vendor.name}
-                </option>
-              ))}
-            </select>
-            {selectedVendor !== 'all' && (
-              <button
-                onClick={() => setSelectedVendor('all')}
-                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
-                title="Clear vendor filter"
+          {/* Vendor filter (admin only) */}
+          {userIsAdmin && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm font-medium text-gray-700">Vendor:</span>
+              <select
+                value={selectedVendor}
+                onChange={(e) => setSelectedVendor(e.target.value)}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white min-w-40"
               >
-                ✕
-              </button>
-            )}
-          </div>
+                <option value="all">All Vendors</option>
+                {uniqueVendors.map(vendor => (
+                  <option key={`${vendor.id}-${vendor.name}`} value={vendor.id}>
+                    {vendor.name}
+                  </option>
+                ))}
+              </select>
+              {selectedVendor !== 'all' && (
+                <button
+                  onClick={() => setSelectedVendor('all')}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                  title="Clear vendor filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
