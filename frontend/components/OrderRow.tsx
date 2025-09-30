@@ -24,6 +24,7 @@ interface OrderRowProps {
   rowNumber?: number;
   columns: Array<{ key: string; label: string; width: number; type: string }>;
   isEven: boolean;
+  currencySymbol?: string;
 }
 
 // Excel-like editable cell
@@ -247,7 +248,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
   onSelect, 
   rowNumber, 
   columns, 
-  isEven 
+  isEven,
+  currencySymbol = '$' 
 }) => {
   const [editableOrder, setEditableOrder] = useState<Order>(order);
   const [fieldConfigs, setFieldConfigs] = useState<OrderFieldConfig[]>(ORDER_FIELD_CONFIGS);
@@ -953,7 +955,11 @@ const OrderRow: React.FC<OrderRowProps> = ({
         return (
           <EditableCell
             key={column.key}
-            value={value}
+            value={
+              column.key === 'price' || column.key === 'total' || column.key === 'transferAmount'
+                ? `${currencySymbol}${Number(value || 0).toFixed(2)}`
+                : value
+            }
             onChange={(val) => handleChange(column.key, val)}
             isEditable={isEditable}
             userIsAdmin={userIsAdmin}

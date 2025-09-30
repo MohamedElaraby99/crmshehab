@@ -13,6 +13,7 @@ interface OrderTableProps {
 }
 
 const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDeleteOrder, onViewHistory, userIsAdmin }) => {
+  const currencySymbol = userIsAdmin ? '¥' : 'SR ';
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -510,6 +511,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                 rowNumber={order.rowNumber}
                 columns={columns}
                 isEven={index % 2 === 0}
+                currencySymbol={currencySymbol}
               />
               );
             })}
