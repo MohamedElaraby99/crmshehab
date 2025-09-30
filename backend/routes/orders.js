@@ -326,7 +326,18 @@ router.post('/', [
     // Emit socket event for new order
     try {
       const io = req.app.get('io');
-      if (io) io.emit('orders:created', orderObj);
+      if (io) {
+        io.emit('orders:created', orderObj);
+        // Notification for admins
+        io.emit('notifications:push', {
+          type: 'order_created',
+          orderId: orderObj.id || orderObj._id,
+          orderNumber: orderObj.orderNumber,
+          vendorName: typeof orderObj.vendorId === 'object' ? orderObj.vendorId?.name : undefined,
+          message: `New order ${orderObj.orderNumber} created`,
+          at: new Date().toISOString()
+        });
+      }
     } catch {}
 
     res.status(201).json({ success: true, data: orderObj });
@@ -712,7 +723,17 @@ router.put('/:id', [
     // Emit socket event for order update
     try {
       const io = req.app.get('io');
-      if (io) io.emit('orders:updated', orderObj);
+      if (io) {
+        io.emit('orders:updated', orderObj);
+        io.emit('notifications:push', {
+          type: 'order_updated',
+          orderId: orderObj.id || orderObj._id,
+          orderNumber: orderObj.orderNumber,
+          vendorName: typeof orderObj.vendorId === 'object' ? orderObj.vendorId?.name : undefined,
+          message: `Order ${orderObj.orderNumber} updated`,
+          at: new Date().toISOString()
+        });
+      }
     } catch {}
 
     res.json({ success: true, message: 'Order updated successfully', data: orderObj });
@@ -740,7 +761,15 @@ router.delete('/:id', authenticateUserOrVendor, async (req, res) => {
 
     try {
       const io = req.app.get('io');
-      if (io) io.emit('orders:deleted', { id: req.params.id });
+      if (io) {
+        io.emit('orders:deleted', { id: req.params.id });
+        io.emit('notifications:push', {
+          type: 'order_deleted',
+          orderId: req.params.id,
+          message: `Order deleted`,
+          at: new Date().toISOString()
+        });
+      }
     } catch {}
     res.json({ success: true, message: 'Order deleted successfully' });
   } catch (error) {
@@ -945,7 +974,16 @@ router.post('/:id/confirm-item', authenticateUserOrVendor, async (req, res) => {
     // Emit socket event for order update after item confirmation
     try {
       const io = req.app.get('io');
-      if (io) io.emit('orders:updated', orderObj);
+      if (io) {
+        io.emit('orders:updated', orderObj);
+        io.emit('notifications:push', {
+          type: 'item_confirmed',
+          orderId: orderObj.id || orderObj._id,
+          orderNumber: orderObj.orderNumber,
+          message: `Item ${itemIndex} confirmed in order ${orderObj.orderNumber}`,
+          at: new Date().toISOString()
+        });
+      }
     } catch {}
 
     res.json({ 
@@ -1053,7 +1091,16 @@ router.post('/:id/item/:itemIndex/image', [authenticateUserOrVendor, upload.sing
     // Emit socket event for order update due to item image upload (full payload when possible)
     try {
       const io = req.app.get('io');
-      if (io) io.emit('orders:updated', fullAfterItemImage || { id: order._id, itemIndex, itemImageUrl: imagePath, imagePath });
+      if (io) {
+        io.emit('orders:updated', fullAfterItemImage || { id: order._id, itemIndex, itemImageUrl: imagePath, imagePath });
+        io.emit('notifications:push', {
+          type: 'item_image_uploaded',
+          orderId: (fullAfterItemImage?.id || order._id),
+          orderNumber: fullAfterItemImage?.orderNumber,
+          message: `Image uploaded for item ${itemIndex} in order ${fullAfterItemImage?.orderNumber || ''}`,
+          at: new Date().toISOString()
+        });
+      }
     } catch {}
 
     res.json({ 
@@ -1147,7 +1194,16 @@ router.post('/:id/image', [authenticateUserOrVendor, upload.single('image')], as
     // Emit socket event for order update due to order image upload (full payload when possible)
     try {
       const io = req.app.get('io');
-      if (io) io.emit('orders:updated', fullAfterOrderImage || { id: order._id, itemImageUrl: imagePath, imagePath });
+      if (io) {
+        io.emit('orders:updated', fullAfterOrderImage || { id: order._id, itemImageUrl: imagePath, imagePath });
+        io.emit('notifications:push', {
+          type: 'order_image_uploaded',
+          orderId: (fullAfterOrderImage?.id || order._id),
+          orderNumber: fullAfterOrderImage?.orderNumber,
+          message: `Order image uploaded for ${fullAfterOrderImage?.orderNumber || ''}`,
+          at: new Date().toISOString()
+        });
+      }
     } catch {}
 
     res.json({ 

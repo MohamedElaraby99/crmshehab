@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface NavigationProps {
@@ -9,6 +9,10 @@ interface NavigationProps {
 const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+  const [notifItems, setNotifItems] = useState<Array<{ key?: string; message: string; at: string }>>([]);
+  const lastNotifRef = React.useRef<{ key: string; ts: number } | null>(null);
 
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -26,6 +30,29 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
+
+  useEffect(() => {
+    // Lazy import to avoid circular deps
+    import('../services/api').then(({ getSocket }) => {
+      const socket = getSocket();
+      const onPush = (payload: any) => {
+        const key = `${payload?.type || 'generic'}:${payload?.orderId || ''}:${payload?.message || ''}`;
+        const now = Date.now();
+        const last = lastNotifRef.current;
+        // Deduplicate bursts of identical notifications within 5 seconds
+        if (last && last.key === key && now - last.ts < 5000) {
+          return;
+        }
+        lastNotifRef.current = { key, ts: now };
+        setNotifItems(prev => [{ key, message: payload?.message || 'Update', at: payload?.at || new Date().toISOString() }, ...prev].slice(0, 20));
+        setNotifCount(prev => prev + 1);
+      };
+      socket.on('notifications:push', onPush);
+      return () => {
+        socket.off('notifications:push', onPush);
+      };
+    });
+  }, []);
 
   return (
     <>
@@ -69,18 +96,41 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
             </div>
             <div className="flex items-center space-x-4">
               {userRole === 'admin' && (
-                <button
-                  title="Notifications"
-                  aria-label="Notifications"
-                  className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all"
-                >
-                  {/* Bell icon */}
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                  {/* Badge (placeholder) */}
-                  <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none text-white bg-red-600 rounded-full shadow">0</span>
-                </button>
+                <div className="relative">
+                  <button
+                    title="Notifications"
+                    aria-label="Notifications"
+                    onClick={() => setNotifOpen(v => !v)}
+                    className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    {notifCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none text-white bg-red-600 rounded-full shadow">{notifCount}</span>
+                    )}
+                  </button>
+                  {notifOpen && (
+                    <div className="absolute right-0 mt-2 w-80 bg-gray-800 text-gray-200 rounded-lg shadow-xl border border-gray-700 z-50">
+                      <div className="px-4 py-2 border-b border-gray-700 flex items-center justify-between">
+                        <span className="text-sm font-semibold">Notifications</span>
+                        <button className="text-xs text-blue-400 hover:text-blue-300" onClick={() => { setNotifCount(0); }}>Mark all read</button>
+                      </div>
+                      <div className="max-h-80 overflow-auto">
+                        {notifItems.length === 0 ? (
+                          <div className="px-4 py-6 text-sm text-gray-400">No notifications yet</div>
+                        ) : (
+                          notifItems.map((n, idx) => (
+                            <div key={n.key || idx} className="px-4 py-3 border-b border-gray-700 last:border-b-0">
+                              <div className="text-sm">{n.message}</div>
+                              <div className="text-[10px] text-gray-400 mt-1">{new Date(n.at).toLocaleString()}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               <div className="hidden lg:block">
                 <div className="bg-gray-700/50 rounded-lg px-3 py-2">

@@ -229,7 +229,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                             Confirmed Orders
                           </dt>
                           <dd className="text-lg font-medium text-gray-900">
-                            {orders.filter(order => order.status === 'confirmed').length}
+                            {orders.filter(order => order.items.some(item => item.status === 'confirmed')).length}
                           </dd>
                         </dl>
                       </div>
@@ -251,7 +251,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                             Pending Orders
                           </dt>
                           <dd className="text-lg font-medium text-gray-900">
-                            {orders.filter(order => order.status === 'pending').length}
+                            {orders.filter(order => order.items.some(item => item.status === 'pending')).length}
                           </dd>
                         </dl>
                       </div>
