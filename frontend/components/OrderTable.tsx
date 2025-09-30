@@ -55,7 +55,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     orders.forEach(order => {
       if (order.vendorId) {
         if (typeof order.vendorId === 'string') {
-          vendorMap.set(order.vendorId, 'Unknown Vendor');
+          // If vendorId is a string, use it as both ID and name
+          vendorMap.set(order.vendorId, order.vendorId);
         } else if (order.vendorId.name) {
           const vendorId = order.vendorId._id || order.vendorId.id;
           vendorMap.set(vendorId, order.vendorId.name);
@@ -119,23 +120,33 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     if (selectedVendor !== 'all') {
       filteredOrders = filteredOrders.filter(order => {
         let orderVendorId = null;
+        let orderVendorName = null;
         
         if (typeof order.vendorId === 'string') {
           orderVendorId = order.vendorId;
+          orderVendorName = order.vendorId;
         } else if (order.vendorId && (order.vendorId._id || order.vendorId.id)) {
           orderVendorId = order.vendorId._id || order.vendorId.id;
+          orderVendorName = order.vendorId.name;
         }
+        
+        // Check both ID and name matches
+        const idMatch = orderVendorId === selectedVendor;
+        const nameMatch = orderVendorName === selectedVendor;
         
         // Debug logging
         console.log('Vendor Filter Debug:', {
           selectedVendor,
           orderVendorId,
+          orderVendorName,
           orderId: order.id,
           orderNumber: order.orderNumber,
-          matches: orderVendorId === selectedVendor
+          idMatch,
+          nameMatch,
+          matches: idMatch || nameMatch
         });
         
-        return orderVendorId === selectedVendor;
+        return idMatch || nameMatch;
       });
     }
     
