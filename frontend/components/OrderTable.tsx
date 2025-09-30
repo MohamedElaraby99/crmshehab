@@ -20,6 +20,9 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [searchType, setSearchType] = useState<'invoiceNumber' | 'itemCount' | 'all'>('all');
   const [selectedVendor, setSelectedVendor] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
   const tableRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState<string | null>(null);
   const scrollPositionRef = useRef<{ scrollTop: number; scrollLeft: number }>({ scrollTop: 0, scrollLeft: 0 });
@@ -60,9 +63,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         if (typeof order.vendorId === 'string') {
           // If vendorId is a string, use it as both ID and name
           vendorMap.set(order.vendorId, order.vendorId);
-        } else if (order.vendorId.name) {
-          const vendorId = order.vendorId._id;
-          vendorMap.set(vendorId, order.vendorId.name);
+        } else if ((order.vendorId as any).name) {
+          const vendorObj: any = order.vendorId;
+          const vendorId = vendorObj.id || vendorObj._id;
+          if (vendorId) {
+            vendorMap.set(String(vendorId), vendorObj.name);
+          }
         }
       }
     });
@@ -122,16 +128,37 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         if (typeof order.vendorId === 'string') {
           orderVendorId = order.vendorId;
           orderVendorName = order.vendorId;
-        } else if (order.vendorId && order.vendorId._id) {
-          orderVendorId = order.vendorId._id;
-          orderVendorName = order.vendorId.name;
+        } else if (order.vendorId && (order.vendorId as any)) {
+          const vendorObj: any = order.vendorId;
+          orderVendorId = vendorObj.id || vendorObj._id;
+          orderVendorName = vendorObj.name;
         }
         
         // Check both ID and name matches
-        const idMatch = orderVendorId === selectedVendor;
+        const idMatch = String(orderVendorId) === String(selectedVendor);
         const nameMatch = orderVendorName === selectedVendor;
         
         return idMatch || nameMatch;
+      });
+    }
+    
+    // Apply status filter (item-level: include order if any item matches)
+    if (statusFilter !== 'all') {
+      const st = statusFilter.toLowerCase();
+      filteredOrders = filteredOrders.filter(order => {
+        const items = order.items || [];
+        return items.some(it => String(it.status || '').toLowerCase() === st);
+      });
+    }
+    
+    // Apply date range filter on orderDate
+    if (dateFrom || dateTo) {
+      const fromTs = dateFrom ? new Date(dateFrom).getTime() : -Infinity;
+      const toTs = dateTo ? new Date(dateTo).getTime() + 24*60*60*1000 - 1 : Infinity; // inclusive end day
+      filteredOrders = filteredOrders.filter(order => {
+        const od = (order as any).orderDate || (order as any).createdAt;
+        const ts = od ? new Date(od).getTime() : 0;
+        return ts >= fromTs && ts <= toTs;
       });
     }
     
@@ -370,7 +397,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
               </div>
             )}
           </div>
-          <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2">
             <button 
               onClick={handleExportExcel}
               className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-200 flex items-center space-x-1"
@@ -384,8 +411,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           </div>
         </div>
         
-        {/* Search row */}
-        <div className="flex items-center space-x-3">
+        {/* Search + Filters row */}
+        <div className="flex flex-wrap items-center gap-3 mt-2">
           <div className="flex items-center space-x-2">
             <span className="text-sm font-medium text-gray-700">Search:</span>
             <select
@@ -423,7 +450,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           
           {/* Vendor filter (admin only) */}
           {userIsAdmin && (
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
               <span className="text-sm font-medium text-gray-700">Vendor:</span>
               <select
                 value={selectedVendor}
@@ -442,6 +469,65 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                   onClick={() => setSelectedVendor('all')}
                   className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
                   title="Clear vendor filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Status filter (admin only) */}
+          {userIsAdmin && (
+            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+              <span className="text-sm font-medium text-gray-700">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white min-w-32"
+              >
+                <option value="all">All</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="shipped">Shipped</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              {statusFilter !== 'all' && (
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                  title="Clear status filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Date range filter (admin only) */}
+          {userIsAdmin && (
+            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+              <span className="text-sm font-medium text-gray-700">Date:</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                title="From"
+              />
+              <span className="text-xs text-gray-500">to</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                title="To"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setDateFrom(''); setDateTo(''); }}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                  title="Clear date filter"
                 >
                   ✕
                 </button>
