@@ -1,7 +1,17 @@
 import { User, Order, Product, Vendor, ProductPurchase, Demand } from '../types';
 import { io, Socket } from 'socket.io-client';
 
-const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4031/api';
+// Resolve API base URL
+const inferApiBaseUrl = (): string => {
+  const envUrl = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined;
+  if (envUrl) return envUrl.replace(/\/$/, '');
+  try {
+    const host = (typeof window !== 'undefined' ? window.location.host : '');
+    if (host === 'crm.fikra.solutions') return 'https://api.crm.fikra.solutions/api';
+  } catch {}
+  return 'http://localhost:4031/api';
+};
+const API_BASE_URL = inferApiBaseUrl();
 
 // Return the server origin (without the trailing /api) for building asset URLs
 export const getApiOrigin = (): string => {
@@ -542,7 +552,6 @@ export const updateOrder = async (id: string, updates: Partial<Order>): Promise<
     console.log('API: updates object:', updates);
     console.log('API: updates type:', typeof updates);
     console.log('API: updates keys:', Object.keys(updates || {}));
-    console.log('API: priceApprovalStatus in updates:', updates.priceApprovalStatus);
     console.log('API: JSON.stringify(updates):', JSON.stringify(updates));
     
     const response = await apiRequest(`/orders/${id}`, {
