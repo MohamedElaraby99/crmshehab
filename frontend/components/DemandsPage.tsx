@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import jsPDF from 'jspdf';
+import { usePDF } from 'react-to-pdf';
 import { Demand, Product, User } from '../types';
 import { getAllDemands, getAllProducts, getAllUsers, getSocket, updateDemandStatus } from '../services/api';
 
@@ -31,77 +31,7 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
     }
   };
 
-  const exportDemandPdf = (d: any, bundle: any[]) => {
-    const doc = new jsPDF();
-    const marginLeft = 14;
-    let y = 20;
-    doc.setFontSize(16);
-    doc.text('Demand Confirmation Report', marginLeft, y);
-    y += 8;
-    doc.setFontSize(10);
-    doc.text(`Date: ${new Date(d.createdAt).toLocaleString()}`, marginLeft, y);
-    y += 6;
-    const u: any = d.userId;
-    const username = typeof u === 'string' ? (users.find(us => (us as any).id === u)?.username || u) : (u?.username || '');
-    doc.text(`User: ${username}`, marginLeft, y);
-    y += 8;
-    // Table header
-    doc.setFontSize(12);
-    doc.text('Items', marginLeft, y);
-    y += 8;
-    doc.setFontSize(10);
-    const rows = (bundle.length ? bundle : [d]).map((bd: any) => {
-      const bp: any = bd.productId;
-      const pid = typeof bp === 'string' ? bp : (bp?._id || bp?.id || '');
-      const fullProd: any = products.find(pr => (pr as any).id === pid);
-      const src = fullProd || (typeof bp === 'object' ? bp : null);
-      const name = src?.name || '';
-      const item = src?.itemNumber || '';
-      const price = typeof src?.sellingPrice === 'number' ? src.sellingPrice : (typeof fullProd?.sellingPrice === 'number' ? fullProd.sellingPrice : 0);
-      return { name, item, price, qty: bd.quantity };
-    });
-    // Column positions
-    const colItem = marginLeft;
-    const colName = marginLeft + 35;
-    const colPrice = marginLeft + 130;
-    const colQty = marginLeft + 165;
-    // Header row
-    doc.setFont(undefined, 'bold');
-    doc.text('Item #', colItem, y);
-    doc.text('Name', colName, y);
-    doc.text('Selling Price', colPrice, y);
-    doc.text('Qty', colQty, y);
-    doc.setFont(undefined, 'normal');
-    y += 6;
-    // Divider
-    doc.line(marginLeft, y - 4, marginLeft + 180, y - 4);
-    // Rows
-    rows.forEach((r) => {
-      doc.text(String(r.item || ''), colItem, y);
-      // Wrap name if long
-      const nameLines = doc.splitTextToSize(String(r.name || ''), colPrice - colName - 4);
-      doc.text(nameLines, colName, y);
-      doc.text(`$${Number(r.price || 0).toFixed(2)}`, colPrice, y);
-      doc.text(String(r.qty || 0), colQty, y);
-      // Adjust y based on wrapped name
-      const usedLines = Array.isArray(nameLines) ? nameLines.length : 1;
-      y += usedLines * 6;
-      if (y > 280) { doc.addPage(); y = 20; }
-    });
-    y += 4;
-    doc.setFontSize(10);
-    doc.text('Status: CONFIRMED', marginLeft, y);
-    y += 6;
-    if (d.notes) {
-      doc.text('Notes:', marginLeft, y);
-      y += 6;
-      const split = doc.splitTextToSize(String(d.notes), 180);
-      doc.text(split, marginLeft, y);
-      y += split.length * 6;
-    }
-    const filename = `demand_${(d._id || d.id || 'report')}.pdf`;
-    doc.save(filename);
-  };
+  const { toPDF, targetRef } = usePDF({ filename: 'demand.pdf' });
 
   useEffect(() => { fetchData(); }, []);
 
@@ -195,9 +125,9 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
     {/* Demand Details Modal */}
     {selectedDemand && (
       <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center" onClick={() => setSelectedDemand(null)}>
-        <div className="bg-white w-full max-w-lg rounded shadow-lg p-4" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold">Demand Details</h3>
+        <div className="bg-white w-full max-w-2xl rounded shadow-lg p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold w-full text-center">Demand Details</h3>
             <button onClick={() => setSelectedDemand(null)} className="text-gray-600 hover:text-gray-800">✕</button>
           </div>
           {(() => {
@@ -215,39 +145,56 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
               return sameUser && dt <= 60000; // within 60 seconds window
             });
             return (
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-gray-600">Date</span><span className="font-medium">{new Date(d.createdAt).toLocaleString()}</span></div>
-                <div className="flex justify-between"><span className="text-gray-600">User</span><span className="font-medium">{username}</span></div>
-                {bundle.length <= 1 ? (
-                  <>
-                    <div className="flex justify-between"><span className="text-gray-600">Product</span><span className="font-medium">{productName}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">Item #</span><span className="font-medium">{itemNumber}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">Quantity</span><span className="font-medium">{d.quantity}</span></div>
-                  </>
-                ) : (
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Items in this request</span>
-                      <span className="text-xs text-gray-500">{bundle.length} items</span>
-                    </div>
-                    <div className="mt-2 border rounded divide-y">
-                      {bundle.map((bd, idx) => {
-                        const bp: any = bd.productId as any;
-                        const bName = typeof bp === 'string' ? (products.find(pr => pr.id === bp)?.name || bp) : (bp?.name || '');
-                        const bItem = typeof bp === 'string' ? (products.find(pr => pr.id === bp)?.itemNumber || '') : (bp?.itemNumber || '');
-                        return (
-                          <div key={`${(bp?._id || bp?.id || bp || '')}-${bd.createdAt}-${idx}`} className="px-3 py-2 flex items-center justify-between text-sm">
-                            <div className="truncate max-w-[65%]"><span className="font-medium text-gray-900">{bName}</span> <span className="text-gray-500 ml-1">#{bItem}</span></div>
-                            <div className="text-gray-900 font-semibold">x{bd.quantity}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
+              <div className="space-y-3 text-sm mx-auto max-w-2xl" ref={targetRef as any}>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="text-gray-600">Date</div>
+                  <div className="font-medium">{new Date(d.createdAt).toLocaleString()}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="text-gray-600">User</div>
+                  <div className="font-medium">{username}</div>
+                </div>
+                {/* Items table (single or bundle) */}
+                <div className="mt-2">
+                  <div className="text-center mb-2">
+                    <span className="text-gray-600">Items</span>
+                    <span className="text-xs text-gray-500 ml-2">{(bundle.length ? bundle : [d]).length} item(s)</span>
                   </div>
-                )}
-                <div>
+                  <div className="overflow-x-auto flex justify-center">
+                    <table className="border border-gray-200 w-auto">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 border-b">Item Number</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 border-b">Name</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 border-b">Selling Price</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 border-b">Quantity</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-100">
+                        {(bundle.length ? bundle : [d]).map((bd: any, idx: number) => {
+                          const bp: any = bd.productId;
+                          const pid = typeof bp === 'string' ? bp : (bp?._id || bp?.id || '');
+                          const fullProd: any = products.find(pr => (pr as any).id === pid);
+                          const src = fullProd || (typeof bp === 'object' ? bp : null);
+                          const name = src?.name || '';
+                          const item = src?.itemNumber || '';
+                          const price = typeof src?.sellingPrice === 'number' ? src.sellingPrice : (typeof fullProd?.sellingPrice === 'number' ? fullProd.sellingPrice : 0);
+                          return (
+                            <tr key={`${pid}-${bd.createdAt || idx}`} className="text-center">
+                              <td className="px-3 py-2 text-sm text-gray-900">{item}</td>
+                              <td className="px-3 py-2 text-sm text-gray-900">{name}</td>
+                              <td className="px-3 py-2 text-sm text-gray-900">${Number(price || 0).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-sm text-gray-900">{bd.quantity}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div className="text-center">
                   <div className="text-gray-600 mb-1">Notes</div>
-                  <div className="p-2 border rounded bg-gray-50 min-h-[48px]">{d.notes || '—'}</div>
+                  <div className="p-2 border rounded bg-gray-50 min-h-[48px] inline-block max-w-xl">{d.notes || '—'}</div>
                 </div>
               </div>
             );
@@ -261,15 +208,7 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
                   className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
                   onClick={() => {
                     const d = selectedDemand as any;
-                    // Compute same bundle used in view
-                    const selTs = new Date(d.createdAt).getTime();
-                    const u: any = d.userId;
-                    const bundle = demands.filter(dm => {
-                      const sameUser = String((dm.userId as any)?._id || (dm.userId as any)?.id || dm.userId) === String((u?._id || u?.id || u));
-                      const dt = Math.abs(new Date(dm.createdAt).getTime() - selTs);
-                      return sameUser && dt <= 60000;
-                    });
-                    exportDemandPdf(d, bundle);
+                    toPDF({ filename: `demand_${(d._id || d.id || 'report')}.pdf` });
                   }}
                 >Export PDF</button>
               )}
