@@ -309,7 +309,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
     // Handle special cases for fields that might be in the order or items
     let updatedOrder = { ...editableOrder };
     
-    if (field === 'quantity' || field === 'price' || field === 'itemPriceApprovalStatus' || field === 'itemStatus' || field === 'itemNotes' || field === 'itemEstimatedDateReady') {
+    if (field === 'quantity' || field === 'price' || field === 'itemPriceApprovalStatus' || field === 'itemStatus' || field === 'itemNotes' || field === 'itemEstimatedDateReady' || field === 'itemPriceApprovalRejectionReason') {
       // Update the correct item based on currentItem or itemIndex
       const currentItem = order.currentItem || (updatedOrder.items && updatedOrder.items[order.itemIndex || 0] ? updatedOrder.items[order.itemIndex || 0] : null);
       const itemIndex = order.itemIndex || 0;
@@ -386,7 +386,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
         };
         
         // For item-level changes, also include the items array
-        if (field === 'price' || field === 'quantity' || field === 'itemPriceApprovalStatus' || field === 'itemStatus' || field === 'itemNotes' || field === 'itemEstimatedDateReady') {
+        if (field === 'price' || field === 'quantity' || field === 'itemPriceApprovalStatus' || field === 'itemStatus' || field === 'itemNotes' || field === 'itemEstimatedDateReady' || field === 'itemPriceApprovalRejectionReason') {
           (vendorUpdate as any).items = updatedOrder.items;
           (vendorUpdate as any).totalAmount = updatedOrder.totalAmount;
         }
@@ -774,6 +774,25 @@ const OrderRow: React.FC<OrderRowProps> = ({
               </td>
             );
           }
+          
+          // When status is 'rejected', render the editable cell
+          const value = getCellValue(column.key);
+          const cellType = getCellType(column.key);
+          const isEditable = canEditField(column.key as any);
+          
+          return (
+            <EditableCell
+              key={column.key}
+              value={value}
+              onChange={(val) => handleChange(column.key, val)}
+              isEditable={isEditable}
+              userIsAdmin={userIsAdmin}
+              type={cellType}
+              width={column.width}
+              isSelected={isSelected}
+              fieldName={column.key}
+            />
+          );
         }
 
         return (
