@@ -70,6 +70,41 @@ const orderSchema = new mongoose.Schema({
       type: String,
       trim: true,
       maxlength: 100
+    },
+    // Item-level confirm form shehab
+    confirmFormShehab: {
+      type: String,
+      trim: true,
+      maxlength: 100
+    },
+    // Item-level invoice number
+    invoiceNumber: {
+      type: String,
+      trim: true,
+      maxlength: 100
+    },
+    // Item-level transfer amount
+    transferAmount: {
+      type: Number,
+      min: 0
+    },
+    // Item-level shipping date to agent
+    shippingDateToAgent: {
+      type: String,
+      trim: true,
+      maxlength: 100
+    },
+    // Item-level shipping date to Saudi
+    shippingDateToSaudi: {
+      type: String,
+      trim: true,
+      maxlength: 100
+    },
+    // Item-level arrival date
+    arrivalDate: {
+      type: String,
+      trim: true,
+      maxlength: 100
     }
   }],
   totalAmount: {

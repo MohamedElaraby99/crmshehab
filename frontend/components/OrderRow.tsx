@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Order } from '../types';
-import { SUPPLIER_EDITABLE_FIELDS } from '../data/mockData';
+import { SUPPLIER_EDITABLE_FIELDS, VENDOR_EDITABLE_ITEM_FIELDS } from '../data/mockData';
 import { ORDER_FIELD_CONFIGS, OrderFieldConfig } from '../data/orderFieldConfig';
 import { uploadOrderImage, getApiOrigin } from '../services/api';
 
@@ -86,20 +86,22 @@ const EditableCell: React.FC<{
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    e.preventDefault(); // Prevent form submission
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && type !== 'textarea') {
+      e.preventDefault(); // Prevent form submission only for non-textarea fields
       handleBlur();
     } else if (e.key === 'Escape') {
+      e.preventDefault();
       setIsEditing(false);
       setEditValue(String(value ?? ''));
     }
+    // For textarea, allow Enter key for new lines
+    // For other input types, allow normal typing
   };
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     e.preventDefault(); // Prevent form submission
     e.stopPropagation(); // Stop event bubbling
-    console.log('OrderRow: handleSelectChange called with value:', e.target.value);
-    console.log('OrderRow: Field being changed: priceApprovalStatus');
+    
     setEditValue(e.target.value);
     // For select elements, immediately save the change
     onChange(e.target.value);
@@ -107,9 +109,9 @@ const EditableCell: React.FC<{
     return false; // Additional prevention
     
     // Test: Send only the priceApprovalStatus field
-    console.log('OrderRow: Testing direct API call with only priceApprovalStatus');
+    
     const testUpdate = { priceApprovalStatus: e.target.value };
-    console.log('OrderRow: Test update object:', testUpdate);
+    
   };
 
   const handleSelectBlur = (e: React.FocusEvent<HTMLSelectElement>) => {
@@ -188,7 +190,7 @@ const EditableCell: React.FC<{
             className={inputClasses}
             autoFocus
           >
-            {fieldName === 'itemStatus' ? (
+            {fieldName === 'itemStatus' || fieldName === 'status' ? (
               <>
                 <option key="pending" value="pending">PENDING</option>
                 <option key="confirmed" value="confirmed">CONFIRMED</option>
@@ -253,24 +255,22 @@ const OrderRow: React.FC<OrderRowProps> = ({
   // Load saved field configurations
   useEffect(() => {
     const savedConfigs = localStorage.getItem('orderFieldConfigs');
+    
     if (savedConfigs) {
       try {
         const parsed = JSON.parse(savedConfigs);
         setFieldConfigs(parsed);
       } catch (error) {
         console.error('Error loading field configurations:', error);
+        setFieldConfigs(ORDER_FIELD_CONFIGS);
       }
+    } else {
+      setFieldConfigs(ORDER_FIELD_CONFIGS);
     }
   }, []);
 
   // Sync local state with incoming order prop
   useEffect(() => {
-    console.log('OrderRow: Syncing with incoming order prop:', {
-      orderId: order.id,
-      itemIndex: order.itemIndex,
-      currentItemPriceApprovalStatus: order.currentItem?.priceApprovalStatus,
-      editableOrderPriceApprovalStatus: editableOrder.items?.[order.itemIndex || 0]?.priceApprovalStatus
-    });
     setEditableOrder(order);
   }, [order]);
 
@@ -279,24 +279,31 @@ const OrderRow: React.FC<OrderRowProps> = ({
       return true;
     }
     
-    // Use dynamic configuration if available, fallback to static config
-    const fieldConfig = fieldConfigs.find(config => config.name === fieldName);
-    if (fieldConfig) {
-      return fieldConfig.editableBy === 'vendor' || fieldConfig.editableBy === 'both';
+    // Special logic for vendors when price approval is rejected
+    if (!userIsAdmin && currentItem?.priceApprovalStatus === 'rejected') {
+      // When price is rejected, vendors can ONLY edit the price field
+      return fieldName === 'price';
     }
     
-    // Fallback to static configuration
-    return SUPPLIER_EDITABLE_FIELDS.includes(fieldName as any);
+    // Use dynamic configuration if available, fallback to static config
+    const fieldConfig = fieldConfigs.find(config => config.name === fieldName);
+    
+    if (fieldConfig) {
+      const isEditable = fieldConfig.editableBy === 'vendor' || fieldConfig.editableBy === 'both';
+      return isEditable;
+    }
+    
+    // Fallback to static configuration - check both order-level and item-level fields
+    const orderLevelResult = SUPPLIER_EDITABLE_FIELDS.includes(fieldName as any);
+    const itemLevelResult = VENDOR_EDITABLE_ITEM_FIELDS.includes(fieldName as any);
+    const fallbackResult = orderLevelResult || itemLevelResult;
+    
+    return fallbackResult;
   };
 
-  const handleChange = (field: string, value: string) => {
-    console.log('OrderRow: handleChange called with field:', field, 'value:', value);
-    console.log('OrderRow: userIsAdmin:', userIsAdmin);
-    console.log('OrderRow: canEditField result:', canEditField(field as any));
-    console.log('OrderRow: Current item price approval status before change:', currentItem?.priceApprovalStatus);
+  const handleChange = (field: string, value: string) => {      
     // Prevent non-admins from changing protected fields
     if (!canEditField(field as any)) {
-      console.log('OrderRow: Field not editable for this user:', field);
       return;
     }
 
@@ -309,7 +316,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
     // Handle special cases for fields that might be in the order or items
     let updatedOrder = { ...editableOrder };
     
-    if (field === 'quantity' || field === 'price' || field === 'itemPriceApprovalStatus' || field === 'itemStatus' || field === 'itemNotes' || field === 'itemEstimatedDateReady' || field === 'itemPriceApprovalRejectionReason') {
+    if (field === 'quantity' || field === 'price' || field === 'itemPriceApprovalStatus' || field === 'itemStatus' || field === 'status' || field === 'itemNotes' || field === 'itemEstimatedDateReady' || field === 'itemPriceApprovalRejectionReason') {
       // Update the correct item based on currentItem or itemIndex
       const currentItem = order.currentItem || (updatedOrder.items && updatedOrder.items[order.itemIndex || 0] ? updatedOrder.items[order.itemIndex || 0] : null);
       const itemIndex = order.itemIndex || 0;
@@ -324,19 +331,14 @@ const OrderRow: React.FC<OrderRowProps> = ({
           updatedOrder.items[itemIndex].unitPrice = isNaN(numValue) ? 0 : numValue;
           updatedOrder.items[itemIndex].totalPrice = updatedOrder.items[itemIndex].quantity * updatedOrder.items[itemIndex].unitPrice;
           
-          // Update the order-level price field
-          // For single item orders, use the item's unitPrice
-          // For multi-item orders, you might want different logic
+          // Only update order-level price for single item orders
           if (updatedOrder.items.length === 1) {
             updatedOrder.price = numValue;
-          } else {
-            // For multi-item orders, you might want to keep the order-level price as is
-            // or calculate it differently based on your business logic
-            updatedOrder.price = numValue;
           }
+          // For multi-item orders, don't update the order-level price
         } else if (field === 'itemPriceApprovalStatus') {
           updatedOrder.items[itemIndex].priceApprovalStatus = String(parsedValue) as 'pending' | 'approved' | 'rejected';
-        } else if (field === 'itemStatus') {
+        } else if (field === 'itemStatus' || field === 'status') {
           updatedOrder.items[itemIndex].status = String(parsedValue) as 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
         } else if (field === 'itemNotes') {
           updatedOrder.items[itemIndex].notes = String(parsedValue);
@@ -344,28 +346,56 @@ const OrderRow: React.FC<OrderRowProps> = ({
           updatedOrder.items[itemIndex].estimatedDateReady = String(parsedValue);
         } else if (field === 'itemPriceApprovalRejectionReason') {
           updatedOrder.items[itemIndex].priceApprovalRejectionReason = String(parsedValue);
+        } else if (field === 'confirmFormShehab') {
+          (updatedOrder.items[itemIndex] as any).confirmFormShehab = String(parsedValue);
+        } else if (field === 'estimatedDateReady') {
+          (updatedOrder.items[itemIndex] as any).estimatedDateReady = String(parsedValue);
+        } else if (field === 'invoiceNumber') {
+          (updatedOrder.items[itemIndex] as any).invoiceNumber = String(parsedValue);
+        } else if (field === 'transferAmount') {
+          (updatedOrder.items[itemIndex] as any).transferAmount = parsedValue;
+        } else if (field === 'shippingDateToAgent') {
+          (updatedOrder.items[itemIndex] as any).shippingDateToAgent = String(parsedValue);
+        } else if (field === 'shippingDateToSaudi') {
+          (updatedOrder.items[itemIndex] as any).shippingDateToSaudi = String(parsedValue);
+        } else if (field === 'arrivalDate') {
+          (updatedOrder.items[itemIndex] as any).arrivalDate = String(parsedValue);
+        } else if (field === 'notes') {
+          (updatedOrder.items[itemIndex] as any).notes = String(parsedValue);
         }
         // Recalculate total amount
         updatedOrder.totalAmount = updatedOrder.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
       }
       
-      console.log('OrderRow: Updated field', field, 'to', parsedValue, 'for item at index', itemIndex);
     } else {
       // Regular field update
       updatedOrder = { ...editableOrder, [field]: String(parsedValue) };
-      console.log('OrderRow: Updated field', field, 'to', parsedValue);
     }
     
     // For item-level fields, send only the specific field that changed with item index
-    if (field.startsWith('item')) {
-      console.log('OrderRow: Sending only item field:', { [field]: parsedValue, itemIndex: itemIndex });
+    if (field.startsWith('item') || field === 'price' || field === 'quantity' || field === 'status' || field === 'confirmFormShehab' || field === 'estimatedDateReady' || field === 'invoiceNumber' || field === 'transferAmount' || field === 'shippingDateToAgent' || field === 'shippingDateToSaudi' || field === 'arrivalDate' || field === 'notes') {
+      // Map frontend field names to backend field names
+      let backendFieldName = field;
+      if (field === 'price') {
+        backendFieldName = 'unitPrice';
+      } else if (field === 'itemPriceApprovalStatus') {
+        backendFieldName = 'priceApprovalStatus';
+      } else if (field === 'itemStatus' || field === 'status') {
+        backendFieldName = 'status';
+      } else if (field === 'itemNotes') {
+        backendFieldName = 'notes';
+      } else if (field === 'itemEstimatedDateReady') {
+        backendFieldName = 'estimatedDateReady';
+      } else if (field === 'itemPriceApprovalRejectionReason') {
+        backendFieldName = 'priceApprovalRejectionReason';
+      }
+      
       // Create a partial order with the ID, item index, and the changed field
       const partialUpdate = { 
         id: editableOrder.id,
         itemIndex: itemIndex,
-        [field]: parsedValue 
+        [backendFieldName]: parsedValue
       };
-      console.log('OrderRow: Partial update object:', partialUpdate);
       
       // Update the local state for item-level fields FIRST
       setEditableOrder(updatedOrder);
@@ -375,8 +405,6 @@ const OrderRow: React.FC<OrderRowProps> = ({
     } else {
       // For non-item fields, update the full order
       setEditableOrder(updatedOrder);
-      console.log('OrderRow: Sending updated order to parent:', updatedOrder);
-      console.log('OrderRow: item price approval status in updated order:', currentItem?.priceApprovalStatus);
       // For vendor updates, send only the specific field that changed
       if (!userIsAdmin) {
         // Create a minimal update object with only the changed field and order ID
@@ -385,41 +413,23 @@ const OrderRow: React.FC<OrderRowProps> = ({
           [field]: parsedValue
         };
         
-        // For item-level changes, also include the items array
-        if (field === 'price' || field === 'quantity' || field === 'itemPriceApprovalStatus' || field === 'itemStatus' || field === 'itemNotes' || field === 'itemEstimatedDateReady' || field === 'itemPriceApprovalRejectionReason') {
-          (vendorUpdate as any).items = updatedOrder.items;
-          (vendorUpdate as any).totalAmount = updatedOrder.totalAmount;
-        }
-        
-        console.log('OrderRow: Vendor update - sending only changed field:', vendorUpdate);
         onUpdate(vendorUpdate as any);
       } else {
-        console.log('OrderRow: Admin update - sending full order object');
-        console.log('OrderRow: Admin full order object items count:', updatedOrder.items?.length);
         onUpdate(updatedOrder);
       }
     }
   };
 
   // Get the current item for display (from flattened structure)
-  const currentItem = order.currentItem || (editableOrder.items && editableOrder.items[0] ? editableOrder.items[0] : null);
+  const itemIndex = order.itemIndex !== undefined ? order.itemIndex : 0;
+  const currentItem = order.currentItem || (editableOrder.items && editableOrder.items[itemIndex] ? editableOrder.items[itemIndex] : null);
   const isFirstItem = order.isFirstItem || false;
   const isLastItem = order.isLastItem || false;
   const totalItemsInOrder = order.totalItemsInOrder || 1;
-  const itemIndex = order.itemIndex !== undefined ? order.itemIndex : 0;
-  
-  // Debug: Log the item index to verify it's correct
-  console.log('OrderRow: itemIndex from order:', order.itemIndex, 'resolved itemIndex:', itemIndex);
 
   const getCellValue = (columnKey: string) => {
     switch (columnKey) {
       case 'itemImage':
-        console.log('OrderRow - Image data for order:', order.id, {
-          itemImageUrl: editableOrder.itemImageUrl,
-          imagePath: editableOrder.imagePath,
-          originalItemImageUrl: order.itemImageUrl,
-          originalImagePath: order.imagePath
-        });
         return editableOrder.itemImageUrl || '';
       case 'itemNumber':
         return currentItem?.itemNumber || 'N/A';
@@ -430,12 +440,6 @@ const OrderRow: React.FC<OrderRowProps> = ({
       case 'total':
         return currentItem ? (currentItem.unitPrice || 0) * (currentItem.quantity || 0) : 0;
       case 'vendor':
-        // Debug vendor data
-        console.log('OrderRow vendor data:', {
-          orderId: editableOrder.id,
-          vendorId: editableOrder.vendorId,
-          vendorIdType: typeof editableOrder.vendorId
-        });
         
         if (typeof editableOrder.vendorId === 'string') {
           return 'Unknown Vendor';
@@ -444,23 +448,23 @@ const OrderRow: React.FC<OrderRowProps> = ({
         }
         return 'Unknown Vendor';
       case 'confirmFormShehab':
-        return editableOrder.confirmFormShehab || '';
+        return currentItem?.confirmFormShehab || editableOrder.confirmFormShehab || '';
       case 'estimatedDateReady':
-        return editableOrder.estimatedDateReady || '';
+        return currentItem?.estimatedDateReady || editableOrder.estimatedDateReady || '';
       case 'invoiceNumber':
-        return editableOrder.invoiceNumber || '';
+        return currentItem?.invoiceNumber || editableOrder.invoiceNumber || '';
       case 'transferAmount':
-        return editableOrder.transferAmount || 0;
+        return currentItem?.transferAmount || editableOrder.transferAmount || 0;
       case 'shippingDateToAgent':
-        return editableOrder.shippingDateToAgent || '';
+        return currentItem?.shippingDateToAgent || editableOrder.shippingDateToAgent || '';
       case 'shippingDateToSaudi':
-        return editableOrder.shippingDateToSaudi || '';
+        return currentItem?.shippingDateToSaudi || editableOrder.shippingDateToSaudi || '';
       case 'arrivalDate':
-        return editableOrder.arrivalDate || '';
+        return currentItem?.arrivalDate || editableOrder.arrivalDate || '';
       case 'notes':
-        return editableOrder.notes || '';
+        return currentItem?.notes || editableOrder.notes || '';
       case 'status':
-        return editableOrder.status || 'pending';
+        return currentItem?.status || 'pending';
       case 'itemPriceApprovalRejectionReason':
         return currentItem?.priceApprovalRejectionReason || '';
       case 'itemPriceApprovalStatus':
@@ -484,6 +488,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
         return 'number';
       case 'itemPriceApprovalStatus':
       case 'itemStatus':
+      case 'status':
         return 'select';
       case 'itemPriceApprovalRejectionReason':
         return 'textarea';
@@ -615,6 +620,19 @@ const OrderRow: React.FC<OrderRowProps> = ({
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.536-10.95a1 1 0 10-1.414-1.414L10 7.586 7.879 5.465a1 1 0 00-1.414 1.414L8.586 9l-2.121 2.121a1 1 0 101.414 1.414L10 10.414l2.121 2.121a1 1 0 001.414-1.414L11.414 9l2.121-2.121z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+                
+                {/* Admin-only: Confirm Item button */}
+                {userIsAdmin && currentItem?.status !== 'confirmed' && currentItem?.status !== 'shipped' && currentItem?.status !== 'delivered' && (
+                  <button
+                    onClick={() => handleChange('itemStatus', 'confirmed')}
+                    className="text-xs text-blue-600 hover:text-blue-800 px-1"
+                    title="Confirm Item"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                   </button>
                 )}
@@ -760,6 +778,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
 
         // Conditional rendering for item-level rejection reason - only show when item price approval is rejected
         if (column.key === 'itemPriceApprovalRejectionReason') {
+          
           // Only show rejection reason field when item price approval status is 'rejected'
           if (currentItem?.priceApprovalStatus !== 'rejected') {
             return (

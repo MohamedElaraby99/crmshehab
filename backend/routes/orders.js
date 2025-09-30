@@ -98,6 +98,34 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
       orders = orders.filter(order => order.items.length === query._itemCountFilter);
     }
 
+    // Auto-update order statuses based on item statuses
+    for (const order of orders) {
+      if (order.items && order.items.length > 0) {
+        const allItemsConfirmed = order.items.every(item => item.status === 'confirmed');
+        const allItemsShipped = order.items.every(item => item.status === 'shipped');
+        const allItemsDelivered = order.items.every(item => item.status === 'delivered');
+        const anyItemCancelled = order.items.some(item => item.status === 'cancelled');
+        
+        let newOrderStatus = order.status;
+        
+        if (allItemsDelivered) {
+          newOrderStatus = 'delivered';
+        } else if (allItemsShipped) {
+          newOrderStatus = 'shipped';
+        } else if (allItemsConfirmed) {
+          newOrderStatus = 'confirmed';
+        } else if (anyItemCancelled) {
+          newOrderStatus = 'cancelled';
+        }
+        
+        if (newOrderStatus !== order.status) {
+          console.log(`Auto-updating order ${order.orderNumber} status from ${order.status} to ${newOrderStatus}`);
+          order.status = newOrderStatus;
+          await order.save();
+        }
+      }
+    }
+
     // Transform orders to include itemImageUrl for frontend compatibility
     const transformedOrders = orders.map(order => {
       const orderObj = order.toJSON();
@@ -364,7 +392,7 @@ router.put('/:id', [
       console.log('Backend: This might indicate a frontend issue where both individual and bulk updates are being sent.');
     }
 
-    // Handle other order-level fields
+    // Handle fields for both order-level and item-level updates
     if (req.body.confirmFormShehab !== undefined) updateData.confirmFormShehab = req.body.confirmFormShehab;
     if (req.body.estimatedDateReady !== undefined) updateData.estimatedDateReady = req.body.estimatedDateReady;
     if (req.body.invoiceNumber !== undefined) updateData.invoiceNumber = req.body.invoiceNumber;
@@ -381,27 +409,94 @@ router.put('/:id', [
     // For individual item updates, use a different approach to preserve all items
     if (req.body.itemIndex !== undefined && req.body.itemIndex >= 0) {
       console.log('Backend: Using individual item update approach');
+      console.log('Backend: Item index:', req.body.itemIndex);
+      console.log('Backend: Update data:', JSON.stringify(updateData, null, 2));
+      console.log('Backend: Request body:', JSON.stringify(req.body, null, 2));
       
-      // Update the order object directly
-      for (const [key, value] of Object.entries(updateData)) {
-        const path = key.split('.');
-        if (path[0] === 'items' && path[1] === req.body.itemIndex.toString()) {
-          const field = path[2];
-          if (order.items[req.body.itemIndex]) {
-            order.items[req.body.itemIndex][field] = value;
-            console.log(`Backend: Updated order.items[${req.body.itemIndex}].${field} to:`, value);
+      // Update the specific item in the order
+      const itemIndex = parseInt(req.body.itemIndex);
+      if (order.items && order.items[itemIndex]) {
+        // Update the specific item with the provided fields
+        console.log(`Backend: Updating item at index ${itemIndex}`);
+        console.log(`Backend: Item before update:`, JSON.stringify(order.items[itemIndex], null, 2));
+        
+        for (const [key, value] of Object.entries(updateData)) {
+          console.log(`Backend: Processing field ${key} with value:`, value);
+          if (key.startsWith('items.')) {
+            const path = key.split('.');
+            if (path.length === 3 && path[0] === 'items' && path[1] === itemIndex.toString()) {
+              const field = path[2];
+              order.items[itemIndex][field] = value;
+              console.log(`Backend: Updated order.items[${itemIndex}].${field} to:`, value);
+            }
+          } else {
+            // Direct field update for the specific item
+            order.items[itemIndex][key] = value;
+            console.log(`Backend: Updated order.items[${itemIndex}].${key} to:`, value);
+            console.log(`Backend: Item after update:`, JSON.stringify(order.items[itemIndex], null, 2));
           }
         }
+        
+        console.log(`Backend: Item after all updates:`, JSON.stringify(order.items[itemIndex], null, 2));
+        
+        // Mark the items array as modified so Mongoose saves the changes
+        order.markModified('items');
+        console.log('Backend: Marked items array as modified');
+        
+        // Recalculate totalPrice for the item if quantity or unitPrice changed
+        if (order.items[itemIndex].quantity && order.items[itemIndex].unitPrice) {
+          order.items[itemIndex].totalPrice = order.items[itemIndex].quantity * order.items[itemIndex].unitPrice;
+          console.log(`Backend: Recalculated totalPrice for item ${itemIndex}:`, order.items[itemIndex].totalPrice);
+        }
+        
+        // Recalculate order total amount
+        order.totalAmount = order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+        console.log('Backend: Recalculated order totalAmount:', order.totalAmount);
+      } else {
+        console.log('Backend: ERROR - Item index out of range or items array not found');
+        return res.status(400).json({ success: false, message: 'Item index out of range' });
       }
       
       // Save the order with all items preserved
+      console.log('Backend: Order before save - item confirmFormShehab:', order.items[itemIndex].confirmFormShehab);
+      console.log('Backend: Order before save - item estimatedDateReady:', order.items[itemIndex].estimatedDateReady);
+      console.log('Backend: Order before save - all item fields:', JSON.stringify(order.items[itemIndex], null, 2));
       await order.save();
       console.log('Backend: Order saved with all items preserved');
+      console.log('Backend: Order after save - item confirmFormShehab:', order.items[itemIndex].confirmFormShehab);
+      console.log('Backend: Order after save - item estimatedDateReady:', order.items[itemIndex].estimatedDateReady);
       
       // Fetch the complete updated order
       const updatedOrder = await Order.findById(req.params.id);
       console.log('Backend: Updated order after save:', JSON.stringify(updatedOrder?.items, null, 2));
       console.log('Backend: Updated order items count:', updatedOrder?.items?.length);
+      console.log('Backend: Item 0 confirmFormShehab:', updatedOrder?.items?.[0]?.confirmFormShehab);
+      
+      // Auto-update order status based on item statuses
+      if (updatedOrder && updatedOrder.items && updatedOrder.items.length > 0) {
+        const allItemsConfirmed = updatedOrder.items.every(item => item.status === 'confirmed');
+        const allItemsShipped = updatedOrder.items.every(item => item.status === 'shipped');
+        const allItemsDelivered = updatedOrder.items.every(item => item.status === 'delivered');
+        const anyItemCancelled = updatedOrder.items.some(item => item.status === 'cancelled');
+        
+        let newOrderStatus = updatedOrder.status;
+        
+        if (allItemsDelivered) {
+          newOrderStatus = 'delivered';
+        } else if (allItemsShipped) {
+          newOrderStatus = 'shipped';
+        } else if (allItemsConfirmed) {
+          newOrderStatus = 'confirmed';
+        } else if (anyItemCancelled) {
+          newOrderStatus = 'cancelled';
+        }
+        
+        if (newOrderStatus !== updatedOrder.status) {
+          console.log(`Backend: Auto-updating order status from ${updatedOrder.status} to ${newOrderStatus}`);
+          updatedOrder.status = newOrderStatus;
+          await updatedOrder.save();
+        }
+      }
     } else {
       // For non-item updates, use the regular approach
       const updatedOrder = await Order.findByIdAndUpdate(req.params.id, updateData, { runValidators: true, new: true });

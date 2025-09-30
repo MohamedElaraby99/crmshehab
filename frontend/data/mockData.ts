@@ -399,6 +399,13 @@ export const SUPPLIER_EDITABLE_FIELDS: (keyof Order)[] = [
   'notes'
 ];
 
+// Additional item-level fields that vendors can edit
+export const VENDOR_EDITABLE_ITEM_FIELDS = [
+  'itemPriceApprovalRejectionReason',
+  'itemNotes',
+  'itemEstimatedDateReady'
+];
+
 
 export const MOCK_ORDERS: Order[] = [
   { id: 'o1', itemNumber: '68263724', productName: 'Gear Assembly', quantity: 100, price: 16, confirmFormShehab: 'Dec 20th', estimatedDateReady: '', invoiceNumber: '', transferAmount: null, shippingDateToAgent: '', shippingDateToSaudi: '', arrivalDate: '', notes: '' },

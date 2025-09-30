@@ -158,7 +158,7 @@ export const ORDER_FIELD_CONFIGS: OrderFieldConfig[] = [
     label: 'Item Price Approval Rejection Reason',
     type: 'textarea',
     required: false,
-    editableBy: 'admin',
+    editableBy: 'both',
     visibleTo: 'both',
     placeholder: 'Reason for rejection'
   },

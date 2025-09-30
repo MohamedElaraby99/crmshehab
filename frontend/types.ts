@@ -14,6 +14,12 @@ export interface OrderItem {
   status?: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   notes?: string;
   estimatedDateReady?: string;
+  confirmFormShehab?: string;
+  invoiceNumber?: string;
+  transferAmount?: number | null;
+  shippingDateToAgent?: string;
+  shippingDateToSaudi?: string;
+  arrivalDate?: string;
 }
 
 export interface Order {

@@ -31,7 +31,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'total', label: 'TOTAL', width: 110, type: 'number' },
     { key: 'vendor', label: 'VENDOR', width: 150, type: 'text' },
     { key: 'itemPriceApprovalStatus', label: 'ITEM PRICE APPROVAL', width: 150, type: 'select' },
-    { key: 'itemPriceApprovalRejectionReason', label: 'ITEM REJECTION REASON', width: 200, type: 'text' },
+    { key: 'itemPriceApprovalRejectionReason', label: 'ITEM REJECTION REASON', width: 200, type: 'textarea' },
     { key: 'confirmFormShehab', label: 'CONFIRM FORM SHEHAB ', width: 150, type: 'date' },
     { key: 'estimatedDateReady', label: 'EST. DATE READY', width: 140, type: 'date' },
     { key: 'invoiceNumber', label: 'INVOICE #', width: 120, type: 'text' },
@@ -40,7 +40,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'shippingDateToSaudi', label: 'SHIP TO SAUDI', width: 140, type: 'date' },
     { key: 'arrivalDate', label: 'ARRIVAL DATE', width: 120, type: 'date' },
     { key: 'notes', label: 'NOTES', width: 200, type: 'text' },
-    { key: 'status', label: 'ORDER STATUS', width: 120, type: 'text' },
+    { key: 'status', label: 'ITEM STATUS', width: 120, type: 'select' },
     { key: 'actions', label: 'ACTIONS', width: 120, type: 'actions' }
   ];
 
@@ -66,7 +66,6 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     });
     
     const vendors = Array.from(vendorMap.entries()).map(([id, name]) => ({ id, name }));
-    console.log('Extracted vendors:', vendors);
     return vendors;
   };
   
@@ -74,11 +73,6 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   
   // Debug: Log sample order data to understand structure
   if (safeOrders.length > 0) {
-    console.log('Sample order data:', {
-      firstOrder: safeOrders[0],
-      vendorId: safeOrders[0].vendorId,
-      vendorIdType: typeof safeOrders[0].vendorId
-    });
   }
   
   // Preserve scroll position during updates
@@ -187,11 +181,6 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     }
     
     const items = order.items || [];
-    console.log(`OrderTable: Processing order ${orderId} with ${items.length} items:`, {
-      orderId,
-      itemsCount: items.length,
-      items: items.map(item => ({ itemNumber: item.itemNumber, quantity: item.quantity }))
-    });
     
     if (items.length === 0) {
       // If no items, create a single row with empty item
@@ -222,31 +211,15 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         // Add a stable key to prevent React from losing track of the item
         stableKey: `${orderId}-${itemIndex}`
       };
-      
-      // Debug: Log the itemIndex for each flattened item
-      console.log(`OrderTable: Flattened item ${itemIndex} for order ${orderId}:`, {
-        itemIndex: flattenedItem.itemIndex,
-        itemNumber: item.itemNumber,
-        orderNumber: order.orderNumber,
-        stableKey: flattenedItem.stableKey
-      });
+    
       
       return flattenedItem;
     });
-    
-    console.log(`OrderTable: Returning ${flattenedItems.length} flattened items for order ${orderId}`);
+
     return flattenedItems;
   });
   
   const numberedOrders = addRowNumbers(flattenedOrderItems);
-  
-  // Debug: Log filtered and flattened data
-  console.log('Filtered orders count:', filteredOrders.length);
-  console.log('Flattened items count:', flattenedOrderItems.length);
-  if (selectedVendor !== 'all') {
-    console.log('Selected vendor:', selectedVendor);
-    console.log('Sample filtered order vendor:', filteredOrders[0]?.vendorId);
-  }
 
   // Sorting functionality
   const handleSort = (key: string) => {
@@ -351,10 +324,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
 
       // Export file
       XLSX.writeFile(workbook, filename);
-
-      console.log(`✅ Exported ${exportData.length} orders to ${filename}`);
     } catch (error) {
-      console.error('❌ Export failed:', error);
       alert('Export failed. Please try again.');
     }
   };
@@ -520,31 +490,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
               // Get the ID from different possible fields
               const orderId = order.id || (order as any)._id;
               
-              // Skip orders without valid IDs
-              if (!orderId || orderId === 'undefined' || orderId === 'null') {
-                console.warn('Skipping order without valid ID:', {
-                  order,
-                  index,
-                  id: order.id,
-                  _id: (order as any)._id,
-                  orderNumber: order.orderNumber
-                });
-                return null;
-              }
-              
               // Use the stable key if available, otherwise fall back to the old method
               const uniqueKey = (order as any).stableKey || `${orderId}-${(order as any).itemIndex || 0}-${index}`;
               
               // Ensure the order object has the id field
               const orderWithId = { ...order, id: orderId };
-              
-              // Debug: Log what's being passed to OrderRow
-              console.log(`OrderTable: Passing to OrderRow - Order ${orderId}, Item ${(order as any).itemIndex}:`, {
-                orderId: orderWithId.id,
-                itemIndex: (order as any).itemIndex,
-                itemNumber: (order as any).currentItem?.itemNumber,
-                orderNumber: orderWithId.orderNumber
-              });
+            
               
               return (
               <OrderRow 
