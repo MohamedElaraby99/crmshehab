@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Product, ProductPurchase, User } from '../types';
-import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage } from '../services/api';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket } from '../services/api';
 import { createDemand } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
@@ -39,6 +39,28 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
       fetchData();
     };
     init();
+  }, []);
+
+  // Realtime: refresh products when orders/products/demands change
+  useEffect(() => {
+    const socket = getSocket();
+    const onAnyChange = () => fetchData();
+    socket.on('orders:created', onAnyChange);
+    socket.on('orders:updated', onAnyChange);
+    socket.on('orders:deleted', onAnyChange);
+    socket.on('products:created', onAnyChange);
+    socket.on('products:updated', onAnyChange);
+    socket.on('products:deleted', onAnyChange);
+    socket.on('demands:created', onAnyChange);
+    return () => {
+      socket.off('orders:created', onAnyChange);
+      socket.off('orders:updated', onAnyChange);
+      socket.off('orders:deleted', onAnyChange);
+      socket.off('products:created', onAnyChange);
+      socket.off('products:updated', onAnyChange);
+      socket.off('products:deleted', onAnyChange);
+      socket.off('demands:created', onAnyChange);
+    };
   }, []);
 
   // Refetch when role changes (e.g., after currentUser loads)

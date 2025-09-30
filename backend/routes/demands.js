@@ -27,6 +27,27 @@ router.post('/', [
     }
 
     const demand = await Demand.create({ productId, userId: req.user._id, quantity, notes });
+    // Socket notifications for admins
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('demands:created', {
+          id: demand._id,
+          productId,
+          userId: req.user._id,
+          quantity,
+          notes,
+          createdAt: demand.createdAt
+        });
+        io.emit('notifications:push', {
+          type: 'demand_created',
+          demandId: demand._id,
+          productId,
+          message: `New demand created (qty ${quantity})`,
+          at: new Date().toISOString()
+        });
+      }
+    } catch {}
     res.status(201).json({ success: true, data: demand });
   } catch (error) {
     console.error('Create demand error:', error);
