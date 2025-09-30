@@ -8,6 +8,7 @@ import VendorsPage from './components/VendorsPage';
 import ProductsPage from './components/ProductsPage';
 import ClientDemandsPage from './components/ClientDemandsPage';
 import WhatsAppRecipientsPage from './components/WhatsAppRecipientsPage';
+import WhatsAppWebPage from './components/WhatsAppWebPage';
 import OrdersPage from './components/OrdersPage';
 import Navigation from './components/Navigation';
 import UsersPage from './components/UsersPage';
@@ -185,8 +186,8 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="hidden sm:flex items-center space-x-2">
-                <Link to="/client/demands" className="px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition">My Demands</Link>
-                <Link to="/client/products" className="px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition">Products</Link>
+                <Link to="/client/products" className={`px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition`}>Browse Products</Link>
+                <Link to="/client/demands" className={`px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition`}>My Demands</Link>
                 <button
                   onClick={handleLogout}
                   className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-all duration-200"
@@ -214,7 +215,7 @@ const App: React.FC = () => {
           {clientMenuOpen && (
             <div className="sm:hidden fixed top-16 left-0 right-0 z-40 bg-gray-800 border-b border-gray-700">
               <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
-                <Link onClick={() => setClientMenuOpen(false)} to="/client/products" className="block px-3 py-2 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700">Products</Link>
+                <Link onClick={() => setClientMenuOpen(false)} to="/client/products" className="block px-3 py-2 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700">Browse Products</Link>
                 <Link onClick={() => setClientMenuOpen(false)} to="/client/demands" className="block px-3 py-2 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700">My Demands</Link>
                 <button onClick={() => { setClientMenuOpen(false); handleLogout(); }} className="block w-full text-left px-3 py-2 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700">Logout</button>
               </div>
@@ -244,6 +245,7 @@ const App: React.FC = () => {
           <Route path="/products" element={<ProductsPage onLogout={handleLogout} />} />
           <Route path="/demands" element={<DemandsPage onLogout={handleLogout} />} />
           <Route path="/whatsapp" element={<WhatsAppRecipientsPage onLogout={handleLogout} />} />
+          <Route path="/whatsapp-web" element={<WhatsAppWebPage onLogout={handleLogout} />} />
           <Route path="/users" element={<UsersPage onLogout={handleLogout} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

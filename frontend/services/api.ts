@@ -233,7 +233,7 @@ export const createUser = async (payload: { username: string; password: string; 
   }
 };
 
-export const updateUser = async (id: string, updates: Partial<{ username: string; role: 'admin' | 'vendor' | 'client'; isActive: boolean; }>): Promise<User | null> => {
+export const updateUser = async (id: string, updates: Partial<{ username: string; password: string; role: 'admin' | 'vendor' | 'client'; isActive: boolean; }>): Promise<User | null> => {
   try {
     const response = await apiRequest(`/users/${id}`, {
       method: 'PUT',
