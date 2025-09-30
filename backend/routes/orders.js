@@ -159,7 +159,14 @@ router.post('/', [
   body('vendorId').isMongoId().withMessage('Valid vendor ID is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
   body('items.*.productId').isMongoId().withMessage('Valid product ID is required'),
-  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1')
+  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+  body('items.*.unitPrice').optional().isNumeric().withMessage('Unit price must be a number'),
+  body('items.*.totalPrice').optional().isNumeric().withMessage('Total price must be a number'),
+  body('items.*.priceApprovalStatus').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Invalid price approval status'),
+  body('items.*.status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid item status'),
+  body('items.*.notes').optional().trim().isLength({ max: 500 }).withMessage('Item notes too long'),
+  body('items.*.estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Item estimated date too long'),
+  body('price').optional().isNumeric().withMessage('Price must be a number')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -171,7 +178,7 @@ router.post('/', [
       });
     }
 
-    const { vendorId, items, shippingAddress, notes, expectedDeliveryDate, orderNumber: providedOrderNumber, confirmFormShehab } = req.body;
+    const { vendorId, items, shippingAddress, notes, expectedDeliveryDate, orderNumber: providedOrderNumber, confirmFormShehab, price } = req.body;
 
     // Use provided order number or generate one
     const orderNumber = providedOrderNumber || `ORD-${String(Date.now()).slice(-6)}`;
@@ -192,7 +199,13 @@ router.post('/', [
       processedItems.push({
         productId: item.productId,
         itemNumber: product.itemNumber,
-        quantity: item.quantity
+        quantity: item.quantity,
+        unitPrice: item.unitPrice || undefined,
+        totalPrice: item.totalPrice || undefined,
+        priceApprovalStatus: item.priceApprovalStatus || 'pending',
+        status: item.status || 'pending',
+        notes: item.notes || '',
+        estimatedDateReady: item.estimatedDateReady || ''
       });
     }
 
@@ -201,6 +214,7 @@ router.post('/', [
       vendorId,
       items: processedItems,
       totalAmount,
+      price,
       shippingAddress,
       notes,
       expectedDeliveryDate,
@@ -241,10 +255,17 @@ router.put('/:id', [
   authenticateUserOrVendor,
   body('status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid status'),
   body('priceApprovalStatus').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Invalid price approval status'),
+  body('priceApprovalRejectionReason').optional().trim().isLength({ max: 500 }).withMessage('Rejection reason too long'),
+  body('items').optional().isArray().withMessage('Items must be an array'),
+  body('items.*.priceApprovalStatus').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Invalid item price approval status'),
+  body('items.*.status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid item status'),
+  body('items.*.notes').optional().trim().isLength({ max: 500 }).withMessage('Item notes too long'),
+  body('items.*.estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Item estimated date too long'),
   body('confirmFormShehab').optional().trim().isLength({ max: 500 }).withMessage('Confirmation form too long'),
   body('estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Estimated date too long'),
   body('invoiceNumber').optional().trim().isLength({ max: 100 }).withMessage('Invoice number too long'),
   body('transferAmount').optional().isNumeric().withMessage('Transfer amount must be a number'),
+  body('price').optional().isNumeric().withMessage('Price must be a number'),
   body('shippingDateToAgent').optional().trim().isLength({ max: 100 }).withMessage('Shipping date too long'),
   body('shippingDateToSaudi').optional().trim().isLength({ max: 100 }).withMessage('Shipping date too long'),
   body('arrivalDate').optional().trim().isLength({ max: 100 }).withMessage('Arrival date too long'),
@@ -283,8 +304,41 @@ router.put('/:id', [
       }
     }
 
+    // Handle items array updates (for item-level fields)
+    if (req.body.items && Array.isArray(req.body.items)) {
+      console.log('OrderRow: Received items for update:', JSON.stringify(req.body.items, null, 2));
+      
+      // Process items to ensure productId is just the ID string, not the populated object
+      const processedItems = req.body.items.map(item => {
+        const processedItem = { ...item };
+        
+        // If productId is an object (populated), extract just the ID
+        if (typeof item.productId === 'object' && item.productId !== null) {
+          processedItem.productId = item.productId._id || item.productId.id;
+        }
+        
+        return processedItem;
+      });
+      
+      console.log('OrderRow: Processed items for update:', JSON.stringify(processedItems, null, 2));
+      updateData.items = processedItems;
+    }
+
+    // Handle other order-level fields
+    if (req.body.confirmFormShehab !== undefined) updateData.confirmFormShehab = req.body.confirmFormShehab;
+    if (req.body.estimatedDateReady !== undefined) updateData.estimatedDateReady = req.body.estimatedDateReady;
+    if (req.body.invoiceNumber !== undefined) updateData.invoiceNumber = req.body.invoiceNumber;
+    if (req.body.transferAmount !== undefined) updateData.transferAmount = req.body.transferAmount;
+    if (req.body.price !== undefined) updateData.price = req.body.price;
+    if (req.body.shippingDateToAgent !== undefined) updateData.shippingDateToAgent = req.body.shippingDateToAgent;
+    if (req.body.shippingDateToSaudi !== undefined) updateData.shippingDateToSaudi = req.body.shippingDateToSaudi;
+    if (req.body.arrivalDate !== undefined) updateData.arrivalDate = req.body.arrivalDate;
+    if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+
     // Apply updates
-    await Order.findByIdAndUpdate(req.params.id, updateData, { runValidators: true });
+    console.log('OrderRow: Applying update data:', JSON.stringify(updateData, null, 2));
+    const updatedOrder = await Order.findByIdAndUpdate(req.params.id, updateData, { runValidators: true, new: true });
+    console.log('OrderRow: Updated order after findByIdAndUpdate:', JSON.stringify(updatedOrder?.items, null, 2));
 
     // Adjust stock and create/remove purchase records if needed
     const newStatus = updateData.status || previousStatus;
@@ -328,14 +382,16 @@ router.put('/:id', [
       await order.save();
     }
 
-    // Fetch the final updated order
-    const updatedOrder = await Order.findById(req.params.id).populate([
+    // Fetch the final updated order with populated fields
+    const finalUpdatedOrder = await Order.findById(req.params.id).populate([
       { path: 'vendorId', select: 'name contactPerson email' },
       { path: 'items.productId', select: 'name itemNumber' }
     ]);
 
+    console.log('OrderRow: Final updated order from DB:', JSON.stringify(finalUpdatedOrder.items, null, 2));
+
     // Transform order to include itemImageUrl for frontend compatibility
-    const orderObj = updatedOrder.toObject();
+    const orderObj = finalUpdatedOrder.toObject();
     
     // ALWAYS ensure both fields exist for consistency
     if (orderObj.imagePath && !orderObj.itemImageUrl) {

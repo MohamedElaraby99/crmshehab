@@ -40,9 +40,39 @@ const orderSchema = new mongoose.Schema({
       required: false,
       min: 0,
       default: undefined
+    },
+    // Item-level price approval status
+    priceApprovalStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending'
+    },
+    // Item-level status
+    status: {
+      type: String,
+      enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'],
+      default: 'pending'
+    },
+    // Item-level notes
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: 500
+    },
+    // Item-level estimated ready date
+    estimatedDateReady: {
+      type: String,
+      trim: true,
+      maxlength: 100
     }
   }],
   totalAmount: {
+    type: Number,
+    required: false,
+    min: 0,
+    default: undefined
+  },
+  price: {
     type: Number,
     required: false,
     min: 0,
@@ -57,6 +87,11 @@ const orderSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending'
+  },
+  priceApprovalRejectionReason: {
+    type: String,
+    trim: true,
+    maxlength: 500
   },
   confirmFormShehab: {
     type: String,

@@ -8,6 +8,11 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  // Item-level fields
+  priceApprovalStatus?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  notes?: string;
+  estimatedDateReady?: string;
 }
 
 export interface Order {
@@ -16,10 +21,13 @@ export interface Order {
   vendorId: string | { _id: string; name: string; contactPerson?: string; email?: string };
   items: OrderItem[];
   totalAmount: number;
+  price?: number;
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   priceApprovalStatus?: 'pending' | 'approved' | 'rejected';
+  priceApprovalRejectionReason?: string;
   confirmFormShehab?: string;
   itemImageUrl?: string;
+  imagePath?: string;
   shippingAddress?: {
     street?: string;
     city?: string;

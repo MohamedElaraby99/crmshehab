@@ -30,7 +30,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'price', label: 'PRICE', width: 100, type: 'number' },
     { key: 'total', label: 'TOTAL', width: 110, type: 'number' },
     { key: 'vendor', label: 'VENDOR', width: 150, type: 'text' },
-    { key: 'priceApprovalStatus', label: 'PRICE APPROVAL', width: 130, type: 'select' },
+    { key: 'priceApprovalStatus', label: 'ORDER PRICE APPROVAL', width: 150, type: 'select' },
+    { key: 'priceApprovalRejectionReason', label: 'REJECTION REASON', width: 200, type: 'text' },
     { key: 'confirmFormShehab', label: 'CONFIRM FORM SHEHAB ', width: 150, type: 'date' },
     { key: 'estimatedDateReady', label: 'EST. DATE READY', width: 140, type: 'date' },
     { key: 'invoiceNumber', label: 'INVOICE #', width: 120, type: 'text' },
@@ -39,7 +40,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'shippingDateToSaudi', label: 'SHIP TO SAUDI', width: 140, type: 'date' },
     { key: 'arrivalDate', label: 'ARRIVAL DATE', width: 120, type: 'date' },
     { key: 'notes', label: 'NOTES', width: 200, type: 'text' },
-    { key: 'status', label: 'STATUS', width: 100, type: 'text' },
+    { key: 'status', label: 'ORDER STATUS', width: 120, type: 'text' },
     { key: 'actions', label: 'ACTIONS', width: 120, type: 'actions' }
   ];
 
@@ -58,7 +59,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           // If vendorId is a string, use it as both ID and name
           vendorMap.set(order.vendorId, order.vendorId);
         } else if (order.vendorId.name) {
-          const vendorId = order.vendorId._id || order.vendorId.id;
+          const vendorId = order.vendorId._id;
           vendorMap.set(vendorId, order.vendorId.name);
         }
       }
@@ -125,8 +126,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         if (typeof order.vendorId === 'string') {
           orderVendorId = order.vendorId;
           orderVendorName = order.vendorId;
-        } else if (order.vendorId && (order.vendorId._id || order.vendorId.id)) {
-          orderVendorId = order.vendorId._id || order.vendorId.id;
+        } else if (order.vendorId && order.vendorId._id) {
+          orderVendorId = order.vendorId._id;
           orderVendorName = order.vendorId.name;
         }
         
@@ -180,7 +181,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   
   // Flatten orders to show each item as a separate row
   const flattenedOrderItems = filteredOrders.flatMap((order, orderIndex) => {
-    const orderId = order.id || order._id;
+    const orderId = order.id || (order as any)._id;
     if (!orderId || orderId === 'undefined' || orderId === 'null') {
       return [];
     }
@@ -492,7 +493,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           <tbody>
             {numberedOrders.map((order, index) => {
               // Get the ID from different possible fields
-              const orderId = order.id || order._id;
+              const orderId = order.id || (order as any)._id;
               
               // Skip orders without valid IDs
               if (!orderId || orderId === 'undefined' || orderId === 'null') {
@@ -500,18 +501,21 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                   order,
                   index,
                   id: order.id,
-                  _id: order._id,
+                  _id: (order as any)._id,
                   orderNumber: order.orderNumber
                 });
                 return null;
               }
+              
+              // Create unique key by combining order ID and item index
+              const uniqueKey = `${orderId}-${(order as any).itemIndex || 0}-${index}`;
               
               // Ensure the order object has the id field
               const orderWithId = { ...order, id: orderId };
               
               return (
               <OrderRow 
-                key={orderId} 
+                key={uniqueKey} 
                 order={orderWithId} 
                 onUpdate={onUpdateOrder || (() => {})}
                 onDelete={onDeleteOrder || (() => {})}

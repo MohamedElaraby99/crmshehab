@@ -152,6 +152,19 @@ export const ORDER_FIELD_CONFIGS: OrderFieldConfig[] = [
       { value: 'approved', label: 'Approved' },
       { value: 'rejected', label: 'Rejected' }
     ]
+  },
+  {
+    name: 'priceApprovalRejectionReason',
+    label: 'Rejection Reason',
+    type: 'textarea',
+    required: false,
+    editableBy: 'admin',
+    visibleTo: 'both',
+    placeholder: 'Enter reason for rejection...',
+    conditional: {
+      field: 'priceApprovalStatus',
+      value: 'rejected'
+    }
   }
 ];
 
