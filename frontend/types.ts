@@ -20,6 +20,16 @@ export interface OrderItem {
   shippingDateToAgent?: string;
   shippingDateToSaudi?: string;
   arrivalDate?: string;
+  // Additional item-level fields
+  isActive?: boolean;
+  stockAdjusted?: boolean;
+  orderDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  price?: number;
+  totalAmount?: number;
+  imagePath?: string;
+  itemImageUrl?: string;
 }
 
 export interface Order {

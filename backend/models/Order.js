@@ -105,6 +105,46 @@ const orderSchema = new mongoose.Schema({
       type: String,
       trim: true,
       maxlength: 100
+    },
+    // Item-level additional fields
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    stockAdjusted: {
+      type: Boolean,
+      default: false
+    },
+    orderDate: {
+      type: Date,
+      default: Date.now
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    },
+    price: {
+      type: Number,
+      min: 0
+    },
+    totalAmount: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+    imagePath: {
+      type: String,
+      trim: true,
+      maxlength: 500
+    },
+    itemImageUrl: {
+      type: String,
+      trim: true,
+      maxlength: 500
     }
   }],
   totalAmount: {

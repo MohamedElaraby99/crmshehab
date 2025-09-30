@@ -347,6 +347,18 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                       Order Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Price Approval
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Stock Adjusted
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Item Price
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Item Total
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -474,6 +486,67 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                         }`}>
                           {order.status ? String(order.status).toUpperCase() : 'PENDING'}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          {order.items && order.items.length > 0 ? (
+                            order.items.map((item, index) => (
+                              <div key={index} className="flex items-center">
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                  (item.priceApprovalStatus || 'pending') === 'approved' ? 'bg-green-100 text-green-800' :
+                                  (item.priceApprovalStatus || 'pending') === 'rejected' ? 'bg-red-100 text-red-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {String(item.priceApprovalStatus || 'pending').toUpperCase()}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-gray-500 text-xs">No items</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          {order.items && order.items.length > 0 ? (
+                            order.items.map((item, index) => (
+                              <div key={index} className="flex items-center">
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                  item.stockAdjusted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {item.stockAdjusted ? 'YES' : 'NO'}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-gray-500 text-xs">No items</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {order.items && order.items.length > 0 ? (
+                            order.items.length === 1 ? (
+                              // Single item - show item price
+                              `$${(order.items[0].price || 0).toFixed(2)}`
+                            ) : (
+                              // Multiple items - show average
+                              `$${(order.items.reduce((sum, item) => sum + (item.price || 0), 0) / order.items.length).toFixed(2)} avg`
+                            )
+                          ) : (
+                            '$0.00'
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {order.items && order.items.length > 0 ? (
+                            // Calculate total for all items using item totalAmount
+                            `$${order.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0).toFixed(2)}`
+                          ) : (
+                            '$0.00'
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">
@@ -829,6 +902,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price Approval</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock Adjusted</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -850,11 +929,47 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ${(item.quantity * (item.unitPrice || 0)).toFixed(2)}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          (item.status || 'pending') === 'confirmed' ? 'bg-green-100 text-green-800' :
+                          (item.status || 'pending') === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                          (item.status || 'pending') === 'delivered' ? 'bg-purple-100 text-purple-800' :
+                          (item.status || 'pending') === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {String(item.status || 'pending').toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          (item.priceApprovalStatus || 'pending') === 'approved' ? 'bg-green-100 text-green-800' :
+                          (item.priceApprovalStatus || 'pending') === 'rejected' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {String(item.priceApprovalStatus || 'pending').toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          item.stockAdjusted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {item.stockAdjusted ? 'YES' : 'NO'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${(item.price || 0).toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${(item.totalAmount || 0).toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.notes || 'No notes'}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                    <td colSpan={11} className="px-6 py-4 text-center text-sm text-gray-500">
                       No items found
                     </td>
                   </tr>

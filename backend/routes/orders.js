@@ -98,6 +98,9 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
       orders = orders.filter(order => order.items.length === query._itemCountFilter);
     }
 
+    // Note: Item-level field migration removed to prevent VersionError conflicts
+    // Fields will be added automatically when orders are created or updated
+
     // Auto-update order statuses based on item statuses
     for (const order of orders) {
       if (order.items && order.items.length > 0) {
@@ -191,9 +194,16 @@ router.post('/', [
   body('items.*.unitPrice').optional().isNumeric().withMessage('Unit price must be a number'),
   body('items.*.totalPrice').optional().isNumeric().withMessage('Total price must be a number'),
   body('items.*.priceApprovalStatus').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Invalid price approval status'),
+  body('items.*.priceApprovalRejectionReason').optional().trim().isLength({ max: 500 }).withMessage('Item rejection reason too long'),
   body('items.*.status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid item status'),
   body('items.*.notes').optional().trim().isLength({ max: 500 }).withMessage('Item notes too long'),
   body('items.*.estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Item estimated date too long'),
+  body('items.*.confirmFormShehab').optional().trim().isLength({ max: 100 }).withMessage('Item confirm form too long'),
+  body('items.*.invoiceNumber').optional().trim().isLength({ max: 100 }).withMessage('Item invoice number too long'),
+  body('items.*.transferAmount').optional().isNumeric().withMessage('Item transfer amount must be a number'),
+  body('items.*.shippingDateToAgent').optional().trim().isLength({ max: 100 }).withMessage('Item shipping date too long'),
+  body('items.*.shippingDateToSaudi').optional().trim().isLength({ max: 100 }).withMessage('Item shipping date too long'),
+  body('items.*.arrivalDate').optional().trim().isLength({ max: 100 }).withMessage('Item arrival date too long'),
   body('price').optional().isNumeric().withMessage('Price must be a number')
 ], async (req, res) => {
   try {
@@ -231,9 +241,25 @@ router.post('/', [
         unitPrice: item.unitPrice || undefined,
         totalPrice: item.totalPrice || undefined,
         priceApprovalStatus: item.priceApprovalStatus || 'pending',
+        priceApprovalRejectionReason: item.priceApprovalRejectionReason || '',
         status: item.status || 'pending',
         notes: item.notes || '',
-        estimatedDateReady: item.estimatedDateReady || ''
+        estimatedDateReady: item.estimatedDateReady || '',
+        confirmFormShehab: item.confirmFormShehab || '',
+        invoiceNumber: item.invoiceNumber || '',
+        transferAmount: item.transferAmount || undefined,
+        shippingDateToAgent: item.shippingDateToAgent || '',
+        shippingDateToSaudi: item.shippingDateToSaudi || '',
+        arrivalDate: item.arrivalDate || '',
+        isActive: item.isActive !== undefined ? item.isActive : true,
+        stockAdjusted: item.stockAdjusted !== undefined ? item.stockAdjusted : false,
+        orderDate: item.orderDate || new Date(),
+        createdAt: item.createdAt || new Date(),
+        updatedAt: item.updatedAt || new Date(),
+        price: item.price || undefined,
+        totalAmount: item.totalAmount || 0,
+        imagePath: item.imagePath || '',
+        itemImageUrl: item.itemImageUrl || ''
       });
     }
 
@@ -288,6 +314,12 @@ router.put('/:id', [
   body('items.*.status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid item status'),
   body('items.*.notes').optional().trim().isLength({ max: 500 }).withMessage('Item notes too long'),
   body('items.*.estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Item estimated date too long'),
+  body('items.*.confirmFormShehab').optional().trim().isLength({ max: 100 }).withMessage('Item confirm form too long'),
+  body('items.*.invoiceNumber').optional().trim().isLength({ max: 100 }).withMessage('Item invoice number too long'),
+  body('items.*.transferAmount').optional().isNumeric().withMessage('Item transfer amount must be a number'),
+  body('items.*.shippingDateToAgent').optional().trim().isLength({ max: 100 }).withMessage('Item shipping date too long'),
+  body('items.*.shippingDateToSaudi').optional().trim().isLength({ max: 100 }).withMessage('Item shipping date too long'),
+  body('items.*.arrivalDate').optional().trim().isLength({ max: 100 }).withMessage('Item arrival date too long'),
   body('confirmFormShehab').optional().trim().isLength({ max: 500 }).withMessage('Confirmation form too long'),
   body('estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Estimated date too long'),
   body('invoiceNumber').optional().trim().isLength({ max: 100 }).withMessage('Invoice number too long'),
@@ -609,6 +641,9 @@ router.get('/vendor/:vendorId', authenticateVendor, async (req, res) => {
         { path: 'vendorId', select: 'name contactPerson email' },
         { path: 'items.productId', select: 'name itemNumber' }
       ]);
+
+    // Note: Item-level field migration removed to prevent VersionError conflicts
+    // Fields will be added automatically when orders are created or updated
 
     // Transform orders to include itemImageUrl for frontend compatibility
     const transformedOrders = orders.map(order => {

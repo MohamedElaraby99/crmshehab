@@ -486,21 +486,21 @@ const OrderRow: React.FC<OrderRowProps> = ({
         }
         return 'Unknown Vendor';
       case 'confirmFormShehab':
-        return currentItem?.confirmFormShehab || editableOrder.confirmFormShehab || '';
+        return currentItem?.confirmFormShehab || '';
       case 'estimatedDateReady':
-        return currentItem?.estimatedDateReady || editableOrder.estimatedDateReady || '';
+        return currentItem?.estimatedDateReady || '';
       case 'invoiceNumber':
-        return currentItem?.invoiceNumber || editableOrder.invoiceNumber || '';
+        return currentItem?.invoiceNumber || '';
       case 'transferAmount':
-        return currentItem?.transferAmount || editableOrder.transferAmount || 0;
+        return currentItem?.transferAmount || 0;
       case 'shippingDateToAgent':
-        return currentItem?.shippingDateToAgent || editableOrder.shippingDateToAgent || '';
+        return currentItem?.shippingDateToAgent || '';
       case 'shippingDateToSaudi':
-        return currentItem?.shippingDateToSaudi || editableOrder.shippingDateToSaudi || '';
+        return currentItem?.shippingDateToSaudi || '';
       case 'arrivalDate':
-        return currentItem?.arrivalDate || editableOrder.arrivalDate || '';
+        return currentItem?.arrivalDate || '';
       case 'notes':
-        return currentItem?.notes || editableOrder.notes || '';
+        return currentItem?.notes || '';
       case 'status':
         return currentItem?.status || 'pending';
       case 'itemPriceApprovalRejectionReason':
