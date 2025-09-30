@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ProductPurchase } from '../types';
+import { getConfirmedDemandsByProduct } from '../services/api';
 
 interface ProductHistoryModalProps {
   productId: string;
@@ -20,6 +21,27 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({
   const totalAmount = safePurchases.reduce((sum, p) => sum + p.totalAmount, 0);
   const averagePrice = safePurchases.length > 0 ? totalAmount / totalQuantity : 0;
   const uniqueVendors = [...new Set(safePurchases.map(p => p.vendorId))].length;
+  const prices = safePurchases.map(p => p.price).filter((v) => typeof v === 'number' && !isNaN(v));
+  const bestPrice = prices.length ? Math.min(...prices) : 0;
+  const highestPrice = prices.length ? Math.max(...prices) : 0;
+
+  const [confirmedDemands, setConfirmedDemands] = useState<Array<{ id: string; user: string; quantity: number; notes?: string; createdAt: string; sellingPrice?: number }>>([]);
+  const [demandsLoading, setDemandsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setDemandsLoading(true);
+    getConfirmedDemandsByProduct(productId).then((list) => {
+      if (!mounted) return;
+      setConfirmedDemands(list);
+      setDemandsLoading(false);
+    }).catch(() => {
+      if (!mounted) return;
+      setConfirmedDemands([]);
+      setDemandsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, [productId]);
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -57,11 +79,19 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({
             </div>
           </div>
 
-          {/* Average Price */}
-          <div className="mb-6">
+          {/* Price Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-gray-50 p-4 rounded-lg">
               <div className="text-sm font-medium text-gray-600">Average Price per Unit</div>
               <div className="text-xl font-bold text-gray-900">${averagePrice.toFixed(2)}</div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg">
+              <div className="text-sm font-medium text-green-600">Best Price</div>
+              <div className="text-xl font-bold text-green-900">${bestPrice.toFixed(2)}</div>
+            </div>
+            <div className="bg-red-50 p-4 rounded-lg">
+              <div className="text-sm font-medium text-red-600">Highest Price</div>
+              <div className="text-xl font-bold text-red-900">${highestPrice.toFixed(2)}</div>
             </div>
           </div>
 
@@ -121,6 +151,41 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Confirmed Demands */}
+          <div className="mt-8">
+            <h4 className="text-lg font-semibold text-gray-900 mb-3">Confirmed Demands</h4>
+            {demandsLoading ? (
+              <div className="text-gray-500">Loading confirmed demands...</div>
+            ) : confirmedDemands.length === 0 ? (
+              <div className="text-gray-500">No confirmed demands for this product.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {confirmedDemands.map((d) => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{new Date(d.createdAt).toLocaleString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{d.user}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{typeof d.sellingPrice === 'number' ? `$${d.sellingPrice.toFixed(2)}` : '—'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{d.quantity}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{d.notes || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
             {safePurchases.length === 0 && (

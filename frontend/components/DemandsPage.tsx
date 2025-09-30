@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePDF } from 'react-to-pdf';
 import { Demand, Product, User } from '../types';
-import { getAllDemands, getAllProducts, getAllUsers, getSocket, updateDemandStatus, getWhatsAppRecipients } from '../services/api';
+import { getAllDemands, getAllProducts, getAllUsers, getSocket, updateDemandStatus, getWhatsAppRecipients, sendDemandReportToWhatsApp } from '../services/api';
 
 interface DemandsPageProps {
   onLogout: () => void;
@@ -226,19 +226,53 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                         </svg>
                       </button>
-                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                      <div className="absolute right-0 mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
                         <div className="py-1">
                           {whatsappRecipients.map((recipient) => (
                             <button
                               key={recipient.id}
                               onClick={() => {
                                 const cleanNumber = recipient.phone.replace(/[^\d]/g, '');
-                                const whatsappUrl = `https://wa.me/${cleanNumber}`;
+                                const d = selectedDemand as any;
+                                const p: any = d.productId;
+                                const u: any = d.userId;
+                                const username = typeof u === 'string' ? (users.find(us => us.id === u)?.username || u) : (u?.username || '');
+                                const selTs = new Date(d.createdAt).getTime();
+                                const bundle = demands.filter(dm => {
+                                  const sameUser = String((dm.userId as any)?._id || (dm.userId as any)?.id || dm.userId) === String((u?._id || u?.id || u));
+                                  const dt = Math.abs(new Date(dm.createdAt).getTime() - selTs);
+                                  return sameUser && dt <= 60000; // within 60 seconds window
+                                });
+                                const list = (bundle.length ? bundle : [d]).map((bd: any) => {
+                                  const bp: any = bd.productId;
+                                  const pid = typeof bp === 'string' ? bp : (bp?._id || bp?.id || '');
+                                  const fullProd: any = products.find(pr => (pr as any).id === pid);
+                                  const src = fullProd || (typeof bp === 'object' ? bp : null);
+                                  const name = src?.name || '';
+                                  const item = src?.itemNumber || '';
+                                  const price = typeof src?.sellingPrice === 'number' ? src.sellingPrice : (typeof fullProd?.sellingPrice === 'number' ? fullProd.sellingPrice : 0);
+                                  const qty = bd.quantity || 0;
+                                  return { item, name, price: Number(price || 0), qty };
+                                });
+                                const total = list.reduce((sum, it) => sum + (it.price * it.qty), 0);
+                                const lines = [
+                                  'Demand Report',
+                                  `Date: ${new Date(d.createdAt).toLocaleString()}`,
+                                  `User: ${username}`,
+                                  '',
+                                  'Items:',
+                                  ...list.map(it => `- ${it.item} • ${it.name} • x${it.qty} • $${it.price.toFixed(2)}`),
+                                  '',
+                                  `Total (est): $${total.toFixed(2)}`,
+                                  `Notes: ${d.notes || '—'}`
+                                ];
+                                const text = encodeURIComponent(lines.join('\n'));
+                                const whatsappUrl = `https://web.whatsapp.com/send?phone=${cleanNumber}&text=${text}`;
                                 window.open(whatsappUrl, '_blank');
                               }}
                               className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                             >
-                              {recipient.name || recipient.phone}
+                              Send to {recipient.name || recipient.phone}
                             </button>
                           ))}
                         </div>
@@ -247,20 +281,34 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
                   )}
                 </>
               )}
-              <button
-                className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
-                onClick={async () => {
-                  const ok = await updateDemandStatus((selectedDemand as any).id || (selectedDemand as any)._id, 'confirmed');
-                  if (ok) { await fetchData(); setSelectedDemand(null); }
-                }}
-              >Confirm</button>
-              <button
-                className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
-                onClick={async () => {
-                  const ok = await updateDemandStatus((selectedDemand as any).id || (selectedDemand as any)._id, 'rejected');
-                  if (ok) { await fetchData(); setSelectedDemand(null); }
-                }}
-              >Reject</button>
+              {String((selectedDemand as any).status || 'pending').toLowerCase() === 'pending' && (
+                <>
+                  <button
+                    className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+                    onClick={async () => {
+                      const d = selectedDemand as any;
+                      const bp: any = d.productId;
+                      const pid = typeof bp === 'string' ? bp : (bp?._id || bp?.id || '');
+                      const fullProd: any = products.find(pr => (pr as any).id === pid);
+                      const currentStock = typeof fullProd?.stock === 'number' ? fullProd.stock : 0;
+                      const qty = d.quantity || 0;
+                      if (currentStock < qty) {
+                        alert('Out of stock');
+                        return;
+                      }
+                      const ok = await updateDemandStatus((d.id || d._id), 'confirmed');
+                      if (ok) { await fetchData(); setSelectedDemand(null); }
+                    }}
+                  >Confirm</button>
+                  <button
+                    className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+                    onClick={async () => {
+                      const ok = await updateDemandStatus((selectedDemand as any).id || (selectedDemand as any)._id, 'rejected');
+                      if (ok) { await fetchData(); setSelectedDemand(null); }
+                    }}
+                  >Reject</button>
+                </>
+              )}
             </div>
           </div>
         </div>

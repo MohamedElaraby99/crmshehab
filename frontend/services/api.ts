@@ -711,6 +711,27 @@ export const updateDemandStatus = async (id: string, status: 'pending' | 'confir
   }
 };
 
+// Send WhatsApp demand report (server will compose and send via Cloud API)
+export const sendDemandReportToWhatsApp = async (
+  demandId: string,
+  recipientPhone: string,
+  bundleWindowSec?: number
+): Promise<{ success: boolean; reportUrl?: string; message?: string }> => {
+  try {
+    const response = await apiRequest(`/demands/${encodeURIComponent(demandId)}/send-report`, {
+      method: 'POST',
+      body: JSON.stringify({ recipientPhone, bundleWindowSec }),
+    });
+    if (response?.success) {
+      return { success: true, reportUrl: response.data?.reportUrl };
+    }
+    return { success: false, message: response?.message || 'Failed to send report' };
+  } catch (error: any) {
+    console.error('Send WhatsApp report failed:', error);
+    return { success: false, message: error?.message || 'Network error' };
+  }
+};
+
 export const getAllProductPurchases = async (): Promise<ProductPurchase[]> => {
   try {
     const response = await apiRequest('/product-purchases');
@@ -767,6 +788,25 @@ export const getProductPurchaseStats = async (productId: string) => {
       lastPurchase: null,
       purchases: []
     };
+  }
+};
+
+// Confirmed demands per product (admin)
+export const getConfirmedDemandsByProduct = async (productId: string): Promise<Array<{ id: string; user: string; quantity: number; notes?: string; createdAt: string; sellingPrice?: number }>> => {
+  try {
+    const response = await apiRequest(`/demands/product/${productId}/confirmed`);
+    const list = response?.success ? (response.data || []) : [];
+    return list.map((d: any) => ({
+      id: d.id || d._id,
+      user: (d.userId && d.userId.username) ? d.userId.username : String(d.userId),
+      quantity: d.quantity || 0,
+      notes: d.notes || '',
+      createdAt: d.createdAt,
+      sellingPrice: (d.productId && typeof d.productId.sellingPrice === 'number') ? d.productId.sellingPrice : undefined
+    }));
+  } catch (error) {
+    console.error('Get confirmed demands by product failed:', error);
+    return [];
   }
 };
 
