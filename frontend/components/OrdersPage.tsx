@@ -234,6 +234,12 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
   };
 
   const handleEditOrder = (order: Order) => {
+    console.log('OrdersPage: handleEditOrder called with order:', {
+      orderId: order.id,
+      vendorId: order.vendorId,
+      vendorIdType: typeof order.vendorId,
+      vendorName: typeof order.vendorId === 'object' ? order.vendorId?.name : 'N/A'
+    });
     setEditingOrder(order);
     setShowModal(true);
   };
@@ -335,10 +341,10 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                       Total Amount
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Item Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Price Approval
+                      Order Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order Date
@@ -438,19 +444,35 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          order.confirmFormShehab ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {order.confirmFormShehab ? 'Confirmed' : 'Pending'}
-                        </span>
+                        <div className="space-y-1">
+                          {order.items && order.items.length > 0 ? (
+                            order.items.map((item, index) => (
+                              <div key={index} className="flex items-center">
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                  item.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                                  item.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                                  item.status === 'delivered' ? 'bg-purple-100 text-purple-800' :
+                                  item.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {item.status ? String(item.status).toUpperCase() : 'PENDING'}
+                                </span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-gray-500 text-xs">No items</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          (order as any).priceApprovalStatus === 'approved' ? 'bg-green-100 text-green-800' :
-                          (order as any).priceApprovalStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                          order.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                          order.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
+                          order.status === 'delivered' ? 'bg-purple-100 text-purple-800' :
+                          order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                           'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {(order as any).priceApprovalStatus ? String((order as any).priceApprovalStatus).toUpperCase() : 'PENDING'}
+                          {order.status ? String(order.status).toUpperCase() : 'PENDING'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Order } from '../types';
 import { SUPPLIER_EDITABLE_FIELDS, VENDOR_EDITABLE_ITEM_FIELDS } from '../data/mockData';
 import { ORDER_FIELD_CONFIGS, OrderFieldConfig } from '../data/orderFieldConfig';
-import { uploadOrderImage, getApiOrigin } from '../services/api';
+import { uploadOrderImage, getApiOrigin, updateOrder } from '../services/api';
 
 interface OrderRowProps {
   order: Order & { 
@@ -252,6 +252,11 @@ const OrderRow: React.FC<OrderRowProps> = ({
   const [editableOrder, setEditableOrder] = useState<Order>(order);
   const [fieldConfigs, setFieldConfigs] = useState<OrderFieldConfig[]>(ORDER_FIELD_CONFIGS);
 
+  // Update editableOrder when the order prop changes (e.g., when items are deleted)
+  useEffect(() => {
+    setEditableOrder(order);
+  }, [order]);
+
   // Load saved field configurations
   useEffect(() => {
     const savedConfigs = localStorage.getItem('orderFieldConfigs');
@@ -417,6 +422,39 @@ const OrderRow: React.FC<OrderRowProps> = ({
       } else {
         onUpdate(updatedOrder);
       }
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    try {
+      const itemIndex = order.itemIndex || 0;
+      
+      // Create updated order with the item removed
+      const updatedItems = [...editableOrder.items];
+      updatedItems.splice(itemIndex, 1);
+      
+      // Recalculate total amount
+      const newTotalAmount = updatedItems.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+      
+      // Update the order using the API service
+      const updatedOrder = await updateOrder(editableOrder.id, {
+        items: updatedItems,
+        totalAmount: newTotalAmount
+      });
+      
+      if (updatedOrder) {
+        // Update local state
+        setEditableOrder(updatedOrder);
+        // Notify parent component
+        onUpdate(updatedOrder);
+        console.log('Item deleted successfully');
+      } else {
+        console.error('Failed to delete item');
+        alert('Failed to delete item');
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      alert('Error deleting item');
     }
   };
 
@@ -637,23 +675,23 @@ const OrderRow: React.FC<OrderRowProps> = ({
                   </button>
                 )}
                 
-                <button
-                  onClick={() => {
-                    if (order.id) {
-                      onDelete(order.id);
-                    } else {
-                      console.error('Cannot delete order: missing ID', order);
-                      alert('Cannot delete order: missing ID');
-                    }
-                  }}
-                  className="text-xs text-red-600 hover:text-red-800 px-1"
-                  title="Delete"
-                  disabled={!order.id}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />
-                  </svg>
-                </button>
+                {/* Admin-only: Delete Item button */}
+                {userIsAdmin && editableOrder.items && (
+                  <button
+                    onClick={() => {
+                      const itemName = currentItem?.productId?.name || currentItem?.itemNumber || 'this item';
+                      if (confirm(`Are you sure you want to delete item "${itemName}"? This action cannot be undone.`)) {
+                        handleDeleteItem();
+                      }
+                    }}
+                    className="text-xs text-orange-600 hover:text-orange-800 px-1"
+                    title="Delete Item"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </td>
           );

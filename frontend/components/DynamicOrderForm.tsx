@@ -63,9 +63,23 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   // Initialize form data
   useEffect(() => {
     if (order) {
+      // Debug vendor information
+      console.log('DynamicOrderForm: Initializing with order:', {
+        orderId: order.id,
+        vendorId: order.vendorId,
+        vendorIdType: typeof order.vendorId,
+        vendorId_id: typeof order.vendorId === 'object' ? order.vendorId?._id : undefined
+      });
+      
       // Load existing order data
+      const vendorId = typeof order.vendorId === 'string' 
+        ? order.vendorId 
+        : (typeof order.vendorId === 'object' && order.vendorId) 
+          ? order.vendorId._id || ''
+          : '';
+      
       const initialData: Record<string, any> = {
-        vendorId: typeof order.vendorId === 'string' ? order.vendorId : order.vendorId?._id || '',
+        vendorId,
         confirmFormShehab: formatDateForInput(order.confirmFormShehab),
         estimatedDateReady: formatDateForInput(order.estimatedDateReady),
         invoiceNumber: order.invoiceNumber || '',
@@ -76,6 +90,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         notes: order.notes || '',
         status: order.status || 'pending'
       };
+      console.log('DynamicOrderForm: Setting initial form data:', initialData);
       setFormData(initialData);
 
       // Load existing items

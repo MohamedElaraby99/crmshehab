@@ -85,7 +85,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         return;
       }
       
-      // For complete order updates
+      // For complete order updates (including when items are deleted)
+      console.log('AdminDashboard: Handling complete order update:', updatedOrder);
       const success = await apiUpdateOrder(updatedOrder.id, updatedOrder as Order);
       if (success) {
         setOrders(prev => prev.map(order => 
@@ -93,6 +94,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         ));
         setShowEditModal(false);
         setEditingOrder(null);
+        console.log('AdminDashboard: Order updated successfully in state');
+      } else {
+        // If API update failed, refresh the orders to get the latest data
+        console.log('AdminDashboard: API update failed, refreshing orders...');
+        await fetchOrders();
       }
     } catch (error) {
       console.error('Error updating order:', error);
