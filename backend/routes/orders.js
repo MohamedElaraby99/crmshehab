@@ -158,6 +158,19 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
         orderObj.itemImageUrl = orderObj.imagePath;
       }
       
+      // Also ensure item-level images have both fields for consistency
+      if (orderObj.items && Array.isArray(orderObj.items)) {
+        orderObj.items = orderObj.items.map(item => {
+          if (item.imagePath && !item.itemImageUrl) {
+            item.itemImageUrl = item.imagePath;
+          }
+          if (item.itemImageUrl && !item.imagePath) {
+            item.imagePath = item.itemImageUrl;
+          }
+          return item;
+        });
+      }
+      
       console.log('Final transformed order:', {
         orderId: orderObj.id,
         imagePath: orderObj.imagePath,
@@ -295,6 +308,19 @@ router.post('/', [
     // If both exist but are different, prefer imagePath as the source of truth
     if (orderObj.imagePath && orderObj.itemImageUrl && orderObj.imagePath !== orderObj.itemImageUrl) {
       orderObj.itemImageUrl = orderObj.imagePath;
+    }
+    
+    // Also ensure item-level images have both fields for consistency
+    if (orderObj.items && Array.isArray(orderObj.items)) {
+      orderObj.items = orderObj.items.map(item => {
+        if (item.imagePath && !item.itemImageUrl) {
+          item.itemImageUrl = item.imagePath;
+        }
+        if (item.itemImageUrl && !item.imagePath) {
+          item.imagePath = item.itemImageUrl;
+        }
+        return item;
+      });
     }
 
     res.status(201).json({ success: true, data: orderObj });
@@ -600,6 +626,19 @@ router.put('/:id', [
     if (orderObj.imagePath && orderObj.itemImageUrl && orderObj.imagePath !== orderObj.itemImageUrl) {
       orderObj.itemImageUrl = orderObj.imagePath;
     }
+    
+    // Also ensure item-level images have both fields for consistency
+    if (orderObj.items && Array.isArray(orderObj.items)) {
+      orderObj.items = orderObj.items.map(item => {
+        if (item.imagePath && !item.itemImageUrl) {
+          item.itemImageUrl = item.imagePath;
+        }
+        if (item.itemImageUrl && !item.imagePath) {
+          item.imagePath = item.itemImageUrl;
+        }
+        return item;
+      });
+    }
 
     res.json({ success: true, message: 'Order updated successfully', data: orderObj });
   } catch (error) {
@@ -662,12 +701,259 @@ router.get('/vendor/:vendorId', authenticateVendor, async (req, res) => {
         orderObj.itemImageUrl = orderObj.imagePath;
       }
       
+      // Also ensure item-level images have both fields for consistency
+      if (orderObj.items && Array.isArray(orderObj.items)) {
+        orderObj.items = orderObj.items.map(item => {
+          if (item.imagePath && !item.itemImageUrl) {
+            item.itemImageUrl = item.imagePath;
+          }
+          if (item.itemImageUrl && !item.imagePath) {
+            item.imagePath = item.itemImageUrl;
+          }
+          return item;
+        });
+      }
+      
       return orderObj;
     });
 
     res.json({ success: true, data: transformedOrders });
   } catch (error) {
     console.error('Get vendor orders error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Confirm item and add to stock
+router.post('/:id/confirm-item', authenticateUserOrVendor, async (req, res) => {
+  try {
+    const { itemIndex, quantity } = req.body;
+    
+    if (itemIndex === undefined || itemIndex < 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Valid item index is required' 
+      });
+    }
+    
+    const order = await Order.findById(req.params.id);
+    if (!order || !order.isActive) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    
+    // Validate item index
+    if (itemIndex >= order.items.length) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Item index ${itemIndex} is out of bounds. Order has ${order.items.length} items.` 
+      });
+    }
+    
+    const item = order.items[itemIndex];
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found' });
+    }
+    
+    // Check if item is already confirmed
+    if (item.status === 'confirmed') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Item is already confirmed' 
+      });
+    }
+    
+    // Get the product to update stock
+    const product = await Product.findById(item.productId);
+    if (!product) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Product not found' 
+      });
+    }
+    
+    // Update item status to confirmed
+    order.items[itemIndex].status = 'confirmed';
+    order.items[itemIndex].stockAdjusted = true;
+    
+    // Add quantity to product stock
+    const newStock = (product.stock || 0) + (item.quantity || 0);
+    await Product.findByIdAndUpdate(item.productId, { stock: newStock });
+    
+    // Create purchase record
+    const populatedVendor = await Order.findById(order._id).populate({ path: 'vendorId', select: 'name' });
+    const vendorName = populatedVendor?.vendorId?.name || 'Unknown';
+    const now = new Date();
+    const price = typeof item.unitPrice === 'number' ? item.unitPrice : 0;
+    const totalAmount = price * (item.quantity || 0);
+    
+    await ProductPurchase.create({
+      productId: item.productId,
+      vendorId: order.vendorId,
+      vendorName,
+      quantity: item.quantity,
+      price,
+      totalAmount,
+      purchaseDate: now,
+      orderId: order._id,
+      notes: `Item confirmation - ${order.notes || ''}`
+    });
+    
+    // Mark the items array as modified
+    order.markModified('items');
+    
+    // Auto-update order status based on item statuses
+    if (order.items && order.items.length > 0) {
+      const allItemsConfirmed = order.items.every(item => item.status === 'confirmed');
+      const allItemsShipped = order.items.every(item => item.status === 'shipped');
+      const allItemsDelivered = order.items.every(item => item.status === 'delivered');
+      const anyItemCancelled = order.items.some(item => item.status === 'cancelled');
+      
+      let newOrderStatus = order.status;
+      
+      if (allItemsDelivered) {
+        newOrderStatus = 'delivered';
+      } else if (allItemsShipped) {
+        newOrderStatus = 'shipped';
+      } else if (allItemsConfirmed) {
+        newOrderStatus = 'confirmed';
+      } else if (anyItemCancelled) {
+        newOrderStatus = 'cancelled';
+      }
+      
+      if (newOrderStatus !== order.status) {
+        order.status = newOrderStatus;
+      }
+    }
+    
+    // Save the order
+    await order.save();
+    
+    // Fetch the updated order with populated fields
+    const updatedOrder = await Order.findById(req.params.id).populate([
+      { path: 'vendorId', select: 'name contactPerson email' },
+      { path: 'items.productId', select: 'name itemNumber' }
+    ]);
+    
+    // Transform order to include itemImageUrl for frontend compatibility
+    const orderObj = updatedOrder.toObject();
+    
+    // ALWAYS ensure both fields exist for consistency
+    if (orderObj.imagePath && !orderObj.itemImageUrl) {
+      orderObj.itemImageUrl = orderObj.imagePath;
+    }
+    if (orderObj.itemImageUrl && !orderObj.imagePath) {
+      orderObj.imagePath = orderObj.itemImageUrl;
+    }
+    
+    // If both exist but are different, prefer imagePath as the source of truth
+    if (orderObj.imagePath && orderObj.itemImageUrl && orderObj.imagePath !== orderObj.itemImageUrl) {
+      orderObj.itemImageUrl = orderObj.imagePath;
+    }
+    
+    // Also ensure item-level images have both fields for consistency
+    if (orderObj.items && Array.isArray(orderObj.items)) {
+      orderObj.items = orderObj.items.map(item => {
+        if (item.imagePath && !item.itemImageUrl) {
+          item.itemImageUrl = item.imagePath;
+        }
+        if (item.itemImageUrl && !item.imagePath) {
+          item.imagePath = item.itemImageUrl;
+        }
+        return item;
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: `Item confirmed and ${item.quantity} units added to stock`,
+      data: orderObj,
+      stockUpdate: {
+        productId: item.productId,
+        productName: product.name,
+        previousStock: product.stock - item.quantity,
+        newStock: newStock,
+        addedQuantity: item.quantity
+      }
+    });
+  } catch (error) {
+    console.error('Confirm item error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Upload image for specific item in order
+router.post('/:id/item/:itemIndex/image', [authenticateUserOrVendor, upload.single('image')], async (req, res) => {
+  try {
+    console.log('Item image upload request:', {
+      orderId: req.params.id,
+      itemIndex: req.params.itemIndex,
+      userType: req.userType,
+      vendorId: req.vendor?._id,
+      userId: req.user?._id,
+      hasFile: !!req.file
+    });
+    
+    const order = await Order.findById(req.params.id);
+    
+    if (!order || !order.isActive) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const itemIndex = parseInt(req.params.itemIndex);
+    
+    // Validate item index
+    if (isNaN(itemIndex) || itemIndex < 0 || itemIndex >= order.items.length) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Invalid item index. Order has ${order.items.length} items.` 
+      });
+    }
+
+    // If user is a vendor, allow them to upload images to any order
+    // (Remove this restriction temporarily for testing)
+    // TODO: Restore proper vendor authorization based on business requirements
+    if (req.userType === 'vendor') {
+      console.log('Vendor uploading item image:', {
+        vendorId: req.vendor._id,
+        orderVendorId: order.vendorId,
+        orderId: order._id,
+        itemIndex: itemIndex
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image file provided' });
+    }
+
+    // Update the specific item with image path
+    const imagePath = `/upload/${req.file.filename}`;
+    order.items[itemIndex].imagePath = imagePath;
+    order.items[itemIndex].itemImageUrl = imagePath; // Also save to itemImageUrl for backward compatibility
+    
+    console.log('Saving order with item image:', {
+      orderId: order._id,
+      itemIndex: itemIndex,
+      imagePath: order.items[itemIndex].imagePath,
+      itemImageUrl: order.items[itemIndex].itemImageUrl
+    });
+    
+    // Mark the items array as modified
+    order.markModified('items');
+    await order.save();
+    
+    console.log('Order saved successfully with item image');
+
+    res.json({ 
+      success: true, 
+      message: 'Item image uploaded successfully',
+      data: { 
+        itemImageUrl: imagePath,
+        imagePath: imagePath,
+        itemIndex: itemIndex
+      }
+    });
+  } catch (error) {
+    console.error('Upload item image error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

@@ -35,6 +35,12 @@ const productSchema = new mongoose.Schema({
     min: 0,
     default: undefined
   },
+  reorderLevel: {
+    type: Number,
+    required: false,
+    min: 0,
+    default: 0
+  },
   stock: {
     type: Number,
     required: true,

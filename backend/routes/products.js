@@ -95,7 +95,7 @@ router.get('/', authenticateUser, async (req, res) => {
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
     const products = await Product.find(query)
-      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock visibleToClients')
+      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock reorderLevel visibleToClients')
       .sort(sortOptions)
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -156,7 +156,7 @@ router.get('/visible/list', authenticateUser, async (req, res) => {
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
     const products = await Product.find(query)
-      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock visibleToClients')
+      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock reorderLevel visibleToClients')
       .sort(sortOptions)
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -205,7 +205,7 @@ router.get('/visible', authenticateUser, async (req, res) => {
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
     const products = await Product.find(query)
-      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock visibleToClients')
+      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock reorderLevel visibleToClients')
       .sort(sortOptions)
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -360,6 +360,7 @@ router.post('/', [
   body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty if provided'),
   body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
   body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0'),
+  body('reorderLevel').optional().isInt({ min: 0 }).withMessage('reorderLevel must be >= 0'),
   body('visibleToClients').optional().isBoolean().withMessage('visibleToClients must be boolean')
 ], async (req, res) => {
   try {
@@ -375,7 +376,7 @@ router.post('/', [
       });
     }
 
-    const { itemNumber, name, description, specifications, sellingPrice, stock, visibleToClients } = req.body;
+    const { itemNumber, name, description, specifications, sellingPrice, stock, reorderLevel, visibleToClients } = req.body;
 
     // Check if item number already exists
     const existingProduct = await Product.findOne({ itemNumber });
@@ -393,7 +394,8 @@ router.post('/', [
       specifications: specifications || {},
       ...(typeof sellingPrice !== 'undefined' ? { sellingPrice } : {}),
       ...(typeof stock !== 'undefined' ? { stock } : {}),
-      ...(typeof visibleToClients !== 'undefined' ? { visibleToClients } : {})
+      ...(typeof visibleToClients !== 'undefined' ? { visibleToClients } : {}),
+      ...(typeof reorderLevel !== 'undefined' ? { reorderLevel } : {})
     });
 
     await product.save();
@@ -420,6 +422,7 @@ router.put('/:id', [
   body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty'),
   body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
   body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0'),
+  body('reorderLevel').optional().isInt({ min: 0 }).withMessage('reorderLevel must be >= 0'),
   body('visibleToClients').optional().isBoolean().withMessage('visibleToClients must be boolean')
 ], async (req, res) => {
   try {

@@ -119,13 +119,15 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
           imgMap[p.id] = p.images[0];
         }
       });
-      // Fallback from recent order images if product lacks an image
+      // Fallback from recent order item images if product lacks an image
       ;(allOrders || []).forEach((order: any) => {
-        if (!order?.itemImageUrl || !order?.items) return;
+        if (!order?.items) return;
         order.items.forEach((it: any) => {
-          const pid = it?.productId?.id;
-          if (pid && !imgMap[pid]) {
-            imgMap[pid] = order.itemImageUrl;
+          const pid = it?.productId?.id || it?.productId;
+          const itemImg = it?.itemImageUrl || it?.imagePath;
+          // Prefer the first image encountered (orders are generally fetched newest first)
+          if (pid && itemImg && !imgMap[pid]) {
+            imgMap[pid] = itemImg;
           }
         });
       });
@@ -308,6 +310,9 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                           Stock
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Reorder Level
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Visible
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Image</th>
@@ -317,7 +322,10 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                       </>
                     )}
                     {userIsClient && (
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Add</th>
+                      <>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Add</th>
+                      </>
                     )}
                   </tr>
                 </thead>
@@ -370,6 +378,12 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                           <>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900">{typeof (product as any).stock === 'number' ? (product as any).stock : 0}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className={`text-sm font-medium ${((product as any).stock ?? 0) <= ((product as any).reorderLevel ?? 0) ? 'text-red-700' : 'text-gray-900'}`}
+                                   title="Reorder Level">
+                                {typeof (product as any).reorderLevel === 'number' ? (product as any).reorderLevel : 0}
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <button
@@ -438,24 +452,32 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                           </>
                         )}
                         {userIsClient && (
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => addToCart(product)}
-                                className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-                                title="Add to Cart"
-                              >
-                                Add to Cart
-                              </button>
-                              <button
-                                onClick={() => raiseDemand(product)}
-                                className="px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
-                                title="Send Demand"
-                              >
-                                Demand
-                              </button>
-                            </div>
-                          </td>
+                          <>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 font-semibold">
+                                {typeof (product as any).stock === 'number' ? (product as any).stock : 0}
+                                <span className="text-xs text-gray-500 ml-1">units</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => addToCart(product)}
+                                  className="px-3 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                                  title="Add to Cart"
+                                >
+                                  Add to Cart
+                                </button>
+                                <button
+                                  onClick={() => raiseDemand(product)}
+                                  className="px-3 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                                  title="Send Demand"
+                                >
+                                  Demand
+                                </button>
+                              </div>
+                            </td>
+                          </>
                         )}
                       </tr>
                     );
@@ -497,6 +519,14 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                     </div>
 
                     <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description}</p>
+
+                    <div className="mb-3">
+                      <div className="text-sm text-gray-600">Available Stock</div>
+                      <div className="text-lg font-semibold text-gray-900">
+                        {typeof (product as any).stock === 'number' ? (product as any).stock : 0}
+                        <span className="text-sm text-gray-500 ml-1">units</span>
+                      </div>
+                    </div>
 
                     <div className="flex justify-between items-center">
                       <button
@@ -652,6 +682,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
     description: product?.description || '',
     sellingPrice: (product as any)?.sellingPrice as number | undefined ?? undefined,
     stock: (product as any)?.stock as number | undefined ?? undefined,
+    reorderLevel: (product as any)?.reorderLevel as number | undefined ?? 0,
     visibleToClients: (product as any)?.visibleToClients as boolean | undefined ?? true,
   });
 
@@ -672,6 +703,9 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
     }
     if (typeof formData.stock === 'number' && !Number.isNaN(formData.stock)) {
       productData.stock = formData.stock;
+    }
+    if (typeof formData.reorderLevel === 'number' && !Number.isNaN(formData.reorderLevel)) {
+      productData.reorderLevel = formData.reorderLevel;
     }
     productData.visibleToClients = !!formData.visibleToClients;
     if (product) {
@@ -792,6 +826,18 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
                 onChange={handleChange}
               />
             </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700">Reorder Level</label>
+        <input
+          name="reorderLevel"
+          type="number"
+          step="1"
+          min="0"
+          className="mt-1 block w-full border rounded px-3 py-2"
+          value={typeof formData.reorderLevel === 'number' ? String(formData.reorderLevel) : ''}
+          onChange={handleChange}
+        />
+      </div>
       <div className="flex items-center space-x-2">
         <input
           id="visibleToClients"

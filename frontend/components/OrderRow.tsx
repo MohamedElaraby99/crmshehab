@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Order } from '../types';
 import { SUPPLIER_EDITABLE_FIELDS, VENDOR_EDITABLE_ITEM_FIELDS } from '../data/mockData';
 import { ORDER_FIELD_CONFIGS, OrderFieldConfig } from '../data/orderFieldConfig';
-import { uploadOrderImage, getApiOrigin, updateOrder } from '../services/api';
+import { uploadOrderImage, uploadOrderItemImage, getApiOrigin, updateOrder, confirmOrderItem } from '../services/api';
 
 interface OrderRowProps {
   order: Order & { 
@@ -468,7 +468,14 @@ const OrderRow: React.FC<OrderRowProps> = ({
   const getCellValue = (columnKey: string) => {
     switch (columnKey) {
       case 'itemImage':
-        return editableOrder.itemImageUrl || '';
+        // Get only item-specific image, no fallback to order-level
+        const itemImage = currentItem?.itemImageUrl || currentItem?.imagePath || '';
+        console.log('Item image for item', order.itemIndex, ':', {
+          itemImageUrl: currentItem?.itemImageUrl,
+          imagePath: currentItem?.imagePath,
+          finalImage: itemImage
+        });
+        return itemImage;
       case 'itemNumber':
         return currentItem?.itemNumber || 'N/A';
       case 'quantity':
@@ -590,6 +597,57 @@ const OrderRow: React.FC<OrderRowProps> = ({
     }
   };
 
+  // Handle item confirmation with stock addition
+  const handleItemConfirmation = async () => {
+    if (!currentItem) return;
+    
+    const itemName = currentItem.productId?.name || currentItem.itemNumber || 'this item';
+    const quantity = currentItem.quantity || 0;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to confirm "${itemName}"?\n\n` +
+      `This will add ${quantity} units to your current stock for this item.\n\n` +
+      `Current stock will be increased by ${quantity} units.`
+    );
+    
+    if (confirmed) {
+      try {
+        // Call the new API function for item confirmation with stock addition
+        const result = await confirmOrderItem(
+          editableOrder.id, 
+          order.itemIndex || 0, 
+          quantity
+        );
+        
+        if (result.success) {
+          // Update local state
+          setEditableOrder(prev => {
+            const updatedItems = [...prev.items];
+            if (updatedItems[order.itemIndex || 0]) {
+              updatedItems[order.itemIndex || 0].status = 'confirmed';
+            }
+            return { ...prev, items: updatedItems };
+          });
+          
+          // Notify parent component
+          if (result.data) {
+            onUpdate(result.data);
+          }
+          
+          console.log('Item confirmed and stock updated successfully');
+          if (result.stockUpdate) {
+            console.log('Stock update details:', result.stockUpdate);
+          }
+        } else {
+          alert(`Failed to confirm item: ${result.message}`);
+        }
+      } catch (error) {
+        console.error('Error confirming item:', error);
+        alert('Error confirming item. Please try again.');
+      }
+    }
+  };
+
   // Check if order has multiple items
   const hasMultipleItems = totalItemsInOrder > 1;
   const itemCount = totalItemsInOrder;
@@ -665,9 +723,9 @@ const OrderRow: React.FC<OrderRowProps> = ({
                 {/* Admin-only: Confirm Item button */}
                 {userIsAdmin && currentItem?.status !== 'confirmed' && currentItem?.status !== 'shipped' && currentItem?.status !== 'delivered' && (
                   <button
-                    onClick={() => handleChange('itemStatus', 'confirmed')}
+                    onClick={handleItemConfirmation}
                     className="text-xs text-blue-600 hover:text-blue-800 px-1"
-                    title="Confirm Item"
+                    title="Confirm Item (Add to Stock)"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -701,6 +759,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
   if (column.key === 'itemImage') {
     const canUpload = !userIsAdmin; // vendors only
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const itemImageUrl = getCellValue('itemImage');
+    
           return (
             <td
               key={column.key}
@@ -708,15 +768,15 @@ const OrderRow: React.FC<OrderRowProps> = ({
               style={{ width: column.width, minWidth: column.width }}
             >
               <div className="flex items-center justify-center space-x-2">
-          {editableOrder.itemImageUrl ? (
+          {itemImageUrl ? (
             <a
-              href={`${getApiOrigin().replace(/\/api\/?$/, '')}${editableOrder.itemImageUrl}`}
+              href={`${getApiOrigin().replace(/\/api\/?$/, '')}${itemImageUrl}`}
               target="_blank"
               rel="noreferrer"
               title="Open full image"
             >
               <img
-                src={`${getApiOrigin().replace(/\/api\/?$/, '')}${editableOrder.itemImageUrl}`}
+                src={`${getApiOrigin().replace(/\/api\/?$/, '')}${itemImageUrl}`}
                 alt="Item"
                 className="w-10 h-10 object-cover rounded border"
               />
@@ -730,9 +790,9 @@ const OrderRow: React.FC<OrderRowProps> = ({
                 type="button"
                 className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
                 onClick={() => fileInputRef.current?.click()}
-                title={editableOrder.itemImageUrl ? 'Change image' : 'Upload image'}
+                title={itemImageUrl ? 'Change this item image' : 'Upload image for this item'}
               >
-                {editableOrder.itemImageUrl ? 'Change' : 'Upload'}
+                {itemImageUrl ? 'Change' : 'Upload'}
               </button>
               <input
                 ref={fileInputRef}
@@ -744,14 +804,33 @@ const OrderRow: React.FC<OrderRowProps> = ({
                   const file = inputEl.files && inputEl.files[0];
                   if (!file) return;
                   try {
-                    const updated = await uploadOrderImage(editableOrder.id, file);
-                    if (updated) {
-                      const updatedOrder = { ...editableOrder, itemImageUrl: updated.itemImageUrl };
-                      setEditableOrder(prev => ({ ...prev, itemImageUrl: updated.itemImageUrl }));
-                      onUpdate(updatedOrder); // Notify parent component to refresh
+                    const result = await uploadOrderItemImage(editableOrder.id, order.itemIndex || 0, file);
+                    if (result.success) {
+                      // Update local state with the new item image
+                      setEditableOrder(prev => {
+                        const updatedItems = [...prev.items];
+                        if (updatedItems[order.itemIndex || 0]) {
+                          updatedItems[order.itemIndex || 0].itemImageUrl = result.data.itemImageUrl;
+                          updatedItems[order.itemIndex || 0].imagePath = result.data.imagePath;
+                        }
+                        return { ...prev, items: updatedItems };
+                      });
+                      
+                      // Create updated order with only the item image change
+                      const updatedOrder = { ...editableOrder };
+                      if (updatedOrder.items && updatedOrder.items[order.itemIndex || 0]) {
+                        updatedOrder.items[order.itemIndex || 0].itemImageUrl = result.data.itemImageUrl;
+                        updatedOrder.items[order.itemIndex || 0].imagePath = result.data.imagePath;
+                      }
+                      
+                      // Notify parent component to refresh
+                      onUpdate(updatedOrder);
+                    } else {
+                      alert(`Failed to upload image: ${result.message}`);
                     }
                   } catch (err) {
-                    console.error(err);
+                    console.error('Upload error:', err);
+                    alert('Failed to upload image. Please try again.');
                   } finally {
                     inputEl.value = '';
                   }
@@ -799,6 +878,9 @@ const OrderRow: React.FC<OrderRowProps> = ({
             cancelled: 'bg-red-100 text-red-800'
           };
           
+          // Use item-level status instead of order-level status
+          const itemStatus = currentItem?.status || 'pending';
+          
           return (
             <td 
               key={column.key}
@@ -806,8 +888,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
               style={{ width: column.width, minWidth: column.width }}
             >
               <div className="flex items-center justify-center h-full">
-                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColors[editableOrder.status as keyof typeof statusColors] || statusColors.pending}`}>
-                  {editableOrder.status?.toUpperCase() || 'PENDING'}
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColors[itemStatus as keyof typeof statusColors] || statusColors.pending}`}>
+                  {itemStatus.toUpperCase()}
                 </span>
               </div>
       </td>

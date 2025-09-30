@@ -549,6 +549,49 @@ export const uploadOrderImage = async (id: string, file: File): Promise<Order | 
   }
 };
 
+// Upload image for specific item in order
+export const uploadOrderItemImage = async (orderId: string, itemIndex: number, file: File): Promise<{ success: boolean; data?: any; message?: string }> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    const url = `${API_BASE_URL}/orders/${orderId}/item/${itemIndex}/image`;
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Upload order item image failed:', error);
+    return { success: false, message: 'Failed to upload item image' };
+  }
+};
+
+// Confirm item and add to stock
+export const confirmOrderItem = async (orderId: string, itemIndex: number, quantity: number): Promise<{ success: boolean; data?: Order; message?: string; stockUpdate?: any }> => {
+  try {
+    const response = await apiRequest(`/orders/${orderId}/confirm-item`, {
+      method: 'POST',
+      body: JSON.stringify({ itemIndex, quantity }),
+    });
+    return response;
+  } catch (error) {
+    console.error('Confirm order item failed:', error);
+    return { success: false, message: 'Failed to confirm item' };
+  }
+};
+
 // Product Purchase functions
 export const getProductPurchases = async (productId: string): Promise<ProductPurchase[]> => {
   try {

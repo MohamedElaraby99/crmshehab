@@ -83,6 +83,7 @@ export interface Product {
   images?: string[];
   sellingPrice?: number;
   stock?: number;
+  reorderLevel?: number;
   visibleToClients?: boolean;
   createdAt: string;
   updatedAt: string;
