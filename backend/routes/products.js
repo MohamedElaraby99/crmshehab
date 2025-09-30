@@ -381,6 +381,23 @@ router.post('/', [
     // Check if item number already exists
     const existingProduct = await Product.findOne({ itemNumber });
     if (existingProduct) {
+      // If an inactive product with same itemNumber exists, reactivate/update it instead of erroring
+      if (existingProduct.isActive === false) {
+        existingProduct.name = name;
+        if (typeof description !== 'undefined') existingProduct.description = description;
+        if (typeof specifications !== 'undefined') existingProduct.specifications = specifications || {};
+        if (typeof sellingPrice !== 'undefined') existingProduct.sellingPrice = sellingPrice;
+        if (typeof stock !== 'undefined') existingProduct.stock = stock;
+        if (typeof visibleToClients !== 'undefined') existingProduct.visibleToClients = visibleToClients;
+        if (typeof reorderLevel !== 'undefined') existingProduct.reorderLevel = reorderLevel;
+        existingProduct.isActive = true;
+        await existingProduct.save();
+        return res.status(200).json({
+          success: true,
+          message: 'Existing product reactivated and updated',
+          data: normalizeProduct(existingProduct)
+        });
+      }
       return res.status(400).json({
         success: false,
         message: 'Item number already exists'

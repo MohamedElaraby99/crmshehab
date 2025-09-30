@@ -207,7 +207,7 @@ const App: React.FC = () => {
   return (
     <Router>
       <div className="min-h-screen bg-gray-100">
-        <Navigation onLogout={handleLogout} />
+        <Navigation onLogout={handleLogout} userRole={currentUser?.role} />
         <Routes>
           <Route path="/" element={<AdminDashboard user={currentUser!} onLogout={handleLogout} />} />
           <Route path="/orders" element={<OrdersPage onLogout={handleLogout} />} />

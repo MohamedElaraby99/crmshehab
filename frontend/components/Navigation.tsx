@@ -3,9 +3,10 @@ import { Link, useLocation } from 'react-router-dom';
 
 interface NavigationProps {
   onLogout: () => void;
+  userRole?: 'admin' | 'vendor' | 'client';
 }
 
-const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
+const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -67,6 +68,20 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout }) => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              {userRole === 'admin' && (
+                <button
+                  title="Notifications"
+                  aria-label="Notifications"
+                  className="relative inline-flex items-center justify-center w-10 h-10 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all"
+                >
+                  {/* Bell icon */}
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  {/* Badge (placeholder) */}
+                  <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold leading-none text-white bg-red-600 rounded-full shadow">0</span>
+                </button>
+              )}
               <div className="hidden lg:block">
                 <div className="bg-gray-700/50 rounded-lg px-3 py-2">
                   <div className="flex items-center space-x-2">
