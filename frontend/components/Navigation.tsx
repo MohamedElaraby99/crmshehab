@@ -65,8 +65,8 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
               <div className="flex-shrink-0 flex items-center">
                 <div className="flex items-center space-x-3">
                   <div className="relative">
-                    <div className="p-2 rounded-xl shadow-lg">
-                      <svg className="h-6 w-6 text-white">
+                    <div className="p-2 rounded-xl shadow-lg bg-white/10 backdrop-blur-sm">
+                      <svg className="h-6 w-6 text-white opacity-80 hover:opacity-100 transition-all duration-200">
                         <path strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                       </svg>
                     </div>
@@ -116,7 +116,20 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
                     <div className="absolute right-0 mt-2 w-80 bg-gray-800 text-gray-200 rounded-lg shadow-xl border border-gray-700 z-50">
                       <div className="px-4 py-2 border-b border-gray-700 flex items-center justify-between">
                         <span className="text-sm font-semibold">Notifications</span>
-                        <button className="text-xs text-blue-400 hover:text-blue-300" onClick={() => { setNotifCount(0); }}>Mark all read</button>
+                        <div className="space-x-2">
+                          <button
+                            className="text-xs text-blue-400 hover:text-blue-300"
+                            onClick={() => { setNotifCount(0); }}
+                          >
+                            Mark all read
+                          </button>
+                          <button
+                            className="text-xs text-red-400 hover:text-red-300"
+                            onClick={() => { setNotifItems([]); setNotifCount(0); }}
+                          >
+                            Clear
+                          </button>
+                        </div>
                       </div>
                       <div className="max-h-80 overflow-auto">
                         {notifItems.length === 0 ? (

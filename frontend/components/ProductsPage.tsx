@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Product, ProductPurchase, User } from '../types';
-import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, getMyDemands } from '../services/api';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, getMyDemands, importProductsFromExcel } from '../services/api';
 import { createDemand } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
@@ -23,6 +23,8 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const [myDemands, setMyDemands] = useState<any[]>([]);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imagePreviewTitle, setImagePreviewTitle] = useState<string>('');
+  const [importing, setImporting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
   const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
@@ -282,6 +284,14 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
               Add Product
             </button>
           )}
+          {userIsAdmin && (
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-3 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow"
+            >
+              Import Excel
+            </button>
+          )}
           {userIsClient && (
             <button
               onClick={() => setCartOpen(true)}
@@ -378,7 +388,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                       </div>
                       <div className="text-right">
                         <div className="text-sm text-gray-500">Selling Price</div>
-                        <div className="text-base font-semibold text-gray-900">{typeof (product as any).sellingPrice === 'number' ? (userIsClient ? `${(product as any).sellingPrice.toFixed(2)} RS ريال سعودي` : `$${(product as any).sellingPrice.toFixed(2)}`) : '-'}</div>
+                        <div className="text-base font-semibold text-gray-900">{typeof (product as any).sellingPrice === 'number' ? (userIsClient ? `${(product as any).sellingPrice.toFixed(2)} RS ريال سعودي` : `¥${(product as any).sellingPrice.toFixed(2)}`) : '-'}</div>
                       </div>
                     </div>
 
@@ -467,6 +477,46 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             setEditingProduct(null);
           }}
         />
+      )}
+
+      {/* Import Excel Modal */}
+      {userIsAdmin && showImportModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white w-full max-w-md rounded shadow-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Import Products from Excel/CSV</h3>
+              <button onClick={() => setShowImportModal(false)} className="text-gray-600 hover:text-gray-800">✕</button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">Upload a .xlsx/.xls/.csv file. Columns supported: <span className="font-mono">OEM, Picture (URL), Quantity, UNIT PRICE, AMOUNT</span>. We create/update by OEM as itemNumber. Images can be URLs.</p>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setImporting(true);
+                  const res = await importProductsFromExcel(file);
+                  setImporting(false);
+                  if (res?.success) {
+                    alert('Import finished');
+                    setShowImportModal(false);
+                    await fetchData();
+                  } else {
+                    alert(res?.message || 'Import failed');
+                  }
+                  e.currentTarget.value = '';
+                }}
+                className="w-full border rounded px-3 py-2"
+              />
+              {importing && <div className="text-sm text-gray-700">Uploading and processing…</div>}
+              <div className="text-xs text-gray-500">Tip: For very large files, keep this tab open until completion.</div>
+            </div>
+            <div className="mt-4 text-right">
+              <button onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded border">Close</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Cart Modal for client */}

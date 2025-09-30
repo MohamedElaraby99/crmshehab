@@ -347,7 +347,7 @@ export const updateVendorCredentials = async (id: string, credentials: { usernam
 // Product functions
 export const getAllProducts = async (): Promise<Product[]> => {
   try {
-    const response = await apiRequest('/products');
+    const response = await apiRequest('/products?limit=1000&page=1');
     return response.success ? response.data : [];
   } catch (error) {
     console.error('Get products failed:', error);
@@ -357,7 +357,7 @@ export const getAllProducts = async (): Promise<Product[]> => {
 
 export const getVisibleProducts = async (): Promise<Product[]> => {
   try {
-    const response = await apiRequest('/products/visible/list');
+    const response = await apiRequest('/products/visible/list?limit=1000&page=1');
     return response.success ? response.data : [];
   } catch (error) {
     console.error('Get visible products failed:', error);
@@ -439,6 +439,32 @@ export const deleteProduct = async (id: string): Promise<boolean> => {
   } catch (error) {
     console.error('Delete product failed:', error);
     return false;
+  }
+};
+
+// Import products from Excel/CSV
+export const importProductsFromExcel = async (file: File): Promise<{ success: boolean; data?: any; message?: string }> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    const url = `${API_BASE_URL}/products/import/excel`;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({ success: false }));
+    if (!response.ok) {
+      return { success: false, message: data?.message || `HTTP ${response.status}` };
+    }
+    return data;
+  } catch (error: any) {
+    console.error('Import products failed:', error);
+    return { success: false, message: error?.message || 'Network error' };
   }
 };
 

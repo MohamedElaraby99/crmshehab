@@ -8,6 +8,15 @@ const Vendor = require('../models/Vendor');
 const ProductPurchase = require('../models/ProductPurchase');
 const Order = require('../models/Order');
 const { authenticateUser, requireAdmin } = require('../middleware/auth');
+const fs = require('fs');
+const os = require('os');
+// Use built-in fetch on Node >=18, fallback to dynamic import
+const getFetch = async () => {
+  if (typeof globalThis.fetch === 'function') return globalThis.fetch.bind(globalThis);
+  const mod = await import('node-fetch');
+  return mod.default;
+};
+let xlsx; // lazy require to avoid startup cost
 
 const router = express.Router();
 
@@ -23,6 +32,7 @@ const productStorage = multer.diskStorage({
   }
 });
 
+// Increase limits later for Excel import; default image limit stays moderate
 const productUpload = multer({
   storage: productStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -30,6 +40,23 @@ const productUpload = multer({
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
     if (allowed.includes(file.mimetype)) cb(null, true);
     else cb(new Error('Only JPG, PNG, WEBP allowed'));
+  }
+});
+
+// Separate multer for large Excel uploads (up to 200 MB)
+const excelUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, path.join(__dirname, '..', 'upload')),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9_.-]/g, '')}`)
+  }),
+  limits: { fileSize: 200 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+    ];
+    if (allowed.includes(file.mimetype) || /\.(xlsx|xls|csv)$/i.test(file.originalname)) cb(null, true); else cb(new Error('Only Excel/CSV files are allowed'));
   }
 });
 
@@ -638,6 +665,137 @@ router.post('/:id/image', [authenticateUser, requireAdmin, productUpload.single(
     });
   } catch (error) {
     console.error('Upload product image error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Import products from Excel/CSV
+router.post('/import/excel', [authenticateUser, requireAdmin, excelUpload.single('file')], async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    // Lazy require xlsx to keep cold start fast
+    if (!xlsx) xlsx = require('xlsx');
+
+    const filePath = req.file.path;
+    const workbook = xlsx.readFile(filePath, { cellDates: false });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    // Read as array-of-arrays to locate the header row reliably
+    const aoa = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const norm = (v) => String(v || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const headerKeywords = ['oem', 'item number', 'part number'];
+    let headerIndex = -1;
+    for (let i = 0; i < Math.min(aoa.length, 20); i++) {
+      const row = aoa[i] || [];
+      const tokens = row.map(norm).filter(Boolean);
+      if (tokens.length === 0) continue;
+      const hasKey = headerKeywords.some(k => tokens.some(t => t.includes(k)));
+      const hasQty = tokens.some(t => t.includes('quantity') || t.includes('qty'));
+      if (hasKey && hasQty) { headerIndex = i; break; }
+    }
+
+    if (headerIndex === -1) {
+      // Fallback to first non-empty row
+      headerIndex = aoa.findIndex(r => (r || []).some(c => String(c).trim() !== ''));
+      if (headerIndex === -1) headerIndex = 0;
+    }
+
+    const headerRow = (aoa[headerIndex] || []).map(h => String(h || ''));
+    // Build objects using detected header
+    const rows = [];
+    for (let i = headerIndex + 1; i < aoa.length; i++) {
+      const r = aoa[i] || [];
+      if ((r.every(c => String(c).trim() === ''))) continue; // skip empty rows
+      const obj = {};
+      for (let c = 0; c < headerRow.length; c++) {
+        const key = headerRow[c] || `COL_${c}`;
+        obj[key] = r[c];
+      }
+      rows.push(obj);
+    }
+
+    const normalizeHeader = (h) => String(h || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+    // Map possible column names from the sample
+    const get = (row, keys) => {
+      // exact key
+      for (const k of keys) {
+        if (k in row && String(row[k]).trim() !== '') return row[k];
+      }
+      // case-insensitive map
+      const map = Object.fromEntries(Object.entries(row).map(([k, v]) => [normalizeHeader(k), v]));
+      for (const k of keys.map(normalizeHeader)) {
+        if (k in map && String(map[k]).trim() !== '') return map[k];
+      }
+      return undefined;
+    };
+
+    const results = { created: 0, updated: 0, skipped: 0, errors: [] };
+    for (const row of rows) {
+      try {
+        const itemNumber = String(get(row, ['OEM', 'Item', 'Item Number', 'Part Number', '编号', 'itemNumber']) || '').trim();
+        const name = String(get(row, ['Name', 'Product', 'Description', '名称', 'name']) || '').trim() || itemNumber;
+        const quantity = Number(get(row, ['Quantity', 'Qty', '数量', 'stock'])) || 0;
+        const unitPrice = Number(String(get(row, ['UNIT PRICE', 'Unit Price', 'Price', '价格', 'sellingPrice'])).replace(/[^0-9.\-]/g, ''));
+        // Picture may be a URL or an image file name in the same folder (unsupported), keep URL support
+        const picture = String(get(row, ['Picture', 'Image', '图片', 'picture'])).trim();
+
+        if (!itemNumber) { results.skipped++; continue; }
+
+        let product = await Product.findOne({ itemNumber });
+        if (!product) {
+          product = new Product({ itemNumber, name, description: '', stock: quantity, ...(Number.isFinite(unitPrice) ? { sellingPrice: unitPrice } : {}) });
+          await product.save();
+          results.created++;
+        } else {
+          product.name = name || product.name;
+          if (Number.isFinite(unitPrice)) product.sellingPrice = unitPrice;
+          if (Number.isFinite(quantity)) product.stock = quantity;
+          if (product.isActive === false) product.isActive = true;
+          await product.save();
+          results.updated++;
+        }
+
+        // If picture is a URL, attempt to download and attach as first image
+        if (picture && /^https?:\/\/./i.test(picture)) {
+          try {
+            const _fetch = await getFetch();
+            const resp = await _fetch(picture);
+            if (resp.ok) {
+              const buf = Buffer.from(await resp.arrayBuffer());
+              const ext = (path.extname(new URL(picture).pathname) || '.jpg').slice(0,10);
+              const fname = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+              const outPath = path.join(__dirname, '..', 'upload', fname);
+              fs.writeFileSync(outPath, buf);
+              const images = Array.isArray(product.images) ? product.images : [];
+              images.unshift(`/upload/${fname}`);
+              product.images = images;
+              await product.save();
+            }
+          } catch (e) {
+            results.errors.push({ itemNumber, message: 'Image download failed', error: String(e.message || e) });
+          }
+        }
+      } catch (e) {
+        results.errors.push({ row, message: 'Row processing failed', error: String(e.message || e) });
+      }
+    }
+
+    // Clean up uploaded file
+    try { fs.unlinkSync(filePath); } catch {}
+
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('products:updated', { bulk: true });
+    } catch {}
+
+    res.json({ success: true, message: 'Import completed', data: results });
+  } catch (error) {
+    console.error('Import products from Excel error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
