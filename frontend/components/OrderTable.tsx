@@ -17,6 +17,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [searchType, setSearchType] = useState<'invoiceNumber' | 'itemCount' | 'all'>('all');
+  const [selectedVendor, setSelectedVendor] = useState<string>('all');
   const tableRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState<string | null>(null);
   const scrollPositionRef = useRef<{ scrollTop: number; scrollLeft: number }>({ scrollTop: 0, scrollLeft: 0 });
@@ -28,6 +29,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'quantity', label: 'QTY', width: 80, type: 'number' },
     { key: 'price', label: 'PRICE', width: 100, type: 'number' },
     { key: 'total', label: 'TOTAL', width: 110, type: 'number' },
+    { key: 'vendor', label: 'VENDOR', width: 150, type: 'text' },
     { key: 'priceApprovalStatus', label: 'PRICE APPROVAL', width: 130, type: 'select' },
     { key: 'confirmFormShehab', label: 'CONFIRM FORM SHEHAB ', width: 150, type: 'date' },
     { key: 'estimatedDateReady', label: 'EST. DATE READY', width: 140, type: 'date' },
@@ -46,6 +48,36 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
 
   // Ensure orders is always an array
   const safeOrders = Array.isArray(orders) ? orders : [];
+  
+  // Extract unique vendors for filter dropdown
+  const getUniqueVendors = (orders: Order[]) => {
+    const vendorMap = new Map();
+    orders.forEach(order => {
+      if (order.vendorId) {
+        if (typeof order.vendorId === 'string') {
+          vendorMap.set(order.vendorId, 'Unknown Vendor');
+        } else if (order.vendorId.name) {
+          const vendorId = order.vendorId._id || order.vendorId.id;
+          vendorMap.set(vendorId, order.vendorId.name);
+        }
+      }
+    });
+    
+    const vendors = Array.from(vendorMap.entries()).map(([id, name]) => ({ id, name }));
+    console.log('Extracted vendors:', vendors);
+    return vendors;
+  };
+  
+  const uniqueVendors = getUniqueVendors(safeOrders);
+  
+  // Debug: Log sample order data to understand structure
+  if (safeOrders.length > 0) {
+    console.log('Sample order data:', {
+      firstOrder: safeOrders[0],
+      vendorId: safeOrders[0].vendorId,
+      vendorIdType: typeof safeOrders[0].vendorId
+    });
+  }
   
   // Preserve scroll position during updates
   useEffect(() => {
@@ -79,15 +111,42 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     }
   }, [orders]);
 
-  // Search functionality
+  // Search and filter functionality
   const filterOrders = (orders: Order[]) => {
+    let filteredOrders = orders;
+    
+    // Apply vendor filter first
+    if (selectedVendor !== 'all') {
+      filteredOrders = filteredOrders.filter(order => {
+        let orderVendorId = null;
+        
+        if (typeof order.vendorId === 'string') {
+          orderVendorId = order.vendorId;
+        } else if (order.vendorId && (order.vendorId._id || order.vendorId.id)) {
+          orderVendorId = order.vendorId._id || order.vendorId.id;
+        }
+        
+        // Debug logging
+        console.log('Vendor Filter Debug:', {
+          selectedVendor,
+          orderVendorId,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          matches: orderVendorId === selectedVendor
+        });
+        
+        return orderVendorId === selectedVendor;
+      });
+    }
+    
+    // Apply search filter
     if (!searchTerm.trim()) {
-      return orders;
+      return filteredOrders;
     }
 
     const term = searchTerm.toLowerCase().trim();
     
-    return orders.filter(order => {
+    return filteredOrders.filter(order => {
       switch (searchType) {
         case 'invoiceNumber':
           return order.invoiceNumber?.toLowerCase().includes(term) || false;
@@ -119,7 +178,50 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   };
 
   const filteredOrders = filterOrders(safeOrders);
-  const numberedOrders = addRowNumbers(filteredOrders);
+  
+  // Flatten orders to show each item as a separate row
+  const flattenedOrderItems = filteredOrders.flatMap((order, orderIndex) => {
+    const orderId = order.id || order._id;
+    if (!orderId || orderId === 'undefined' || orderId === 'null') {
+      return [];
+    }
+    
+    const items = order.items || [];
+    if (items.length === 0) {
+      // If no items, create a single row with empty item
+      return [{
+        ...order,
+        id: orderId,
+        itemIndex: 0,
+        isFirstItem: true,
+        isLastItem: true,
+        totalItemsInOrder: 0,
+        currentItem: null,
+        orderRowNumber: orderIndex + 1
+      }];
+    }
+    
+    return items.map((item, itemIndex) => ({
+      ...order,
+      id: orderId,
+      itemIndex,
+      isFirstItem: itemIndex === 0,
+      isLastItem: itemIndex === items.length - 1,
+      totalItemsInOrder: items.length,
+      currentItem: item,
+      orderRowNumber: orderIndex + 1
+    }));
+  });
+  
+  const numberedOrders = addRowNumbers(flattenedOrderItems);
+  
+  // Debug: Log filtered and flattened data
+  console.log('Filtered orders count:', filteredOrders.length);
+  console.log('Flattened items count:', flattenedOrderItems.length);
+  if (selectedVendor !== 'all') {
+    console.log('Selected vendor:', selectedVendor);
+    console.log('Sample filtered order vendor:', filteredOrders[0]?.vendorId);
+  }
 
   // Sorting functionality
   const handleSort = (key: string) => {
@@ -244,9 +346,20 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
               <span className="text-sm text-gray-600">
                 {filteredOrders.length} of {safeOrders.length}
               </span>
-              {searchTerm && (
+              {(searchTerm || selectedVendor !== 'all') && (
                 <span className="text-xs text-blue-600">(filtered)</span>
               )}
+            </div>
+            {/* Legend for visual indicators */}
+            <div className="flex items-center space-x-3 text-xs text-gray-600">
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 border-l-4 border-l-green-500"></div>
+                <span>Vendor completed</span>
+              </div>
+              <div className="flex items-center space-x-1">
+                <div className="w-3 h-3 border-t-2 border-b-2 border-orange-400"></div>
+                <span>Multi-item order</span>
+              </div>
             </div>
             {selectedRows.size > 0 && (
               <div className="flex items-center space-x-2">
@@ -305,6 +418,32 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                 onClick={() => setSearchTerm('')}
                 className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
                 title="Clear search"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          
+          {/* Vendor filter */}
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">Vendor:</span>
+            <select
+              value={selectedVendor}
+              onChange={(e) => setSelectedVendor(e.target.value)}
+              className="text-xs border border-gray-300 rounded px-2 py-1 bg-white min-w-40"
+            >
+              <option value="all">All Vendors</option>
+              {uniqueVendors.map(vendor => (
+                <option key={vendor.id} value={vendor.id}>
+                  {vendor.name}
+                </option>
+              ))}
+            </select>
+            {selectedVendor !== 'all' && (
+              <button
+                onClick={() => setSelectedVendor('all')}
+                className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                title="Clear vendor filter"
               >
                 ✕
               </button>

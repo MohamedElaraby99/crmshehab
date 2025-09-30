@@ -6,7 +6,15 @@ import { ORDER_FIELD_CONFIGS, OrderFieldConfig } from '../data/orderFieldConfig'
 import { uploadOrderImage, getApiOrigin } from '../services/api';
 
 interface OrderRowProps {
-  order: Order & { rowNumber?: number };
+  order: Order & { 
+    rowNumber?: number;
+    itemIndex?: number;
+    isFirstItem?: boolean;
+    isLastItem?: boolean;
+    totalItemsInOrder?: number;
+    currentItem?: any;
+    orderRowNumber?: number;
+  };
   onUpdate: (order: Order) => void;
   onDelete: (orderId: string) => void;
   onViewHistory: (itemNumber: string) => void;
@@ -324,8 +332,12 @@ const OrderRow: React.FC<OrderRowProps> = ({
     }
   };
 
-  // Get the first item for display (assuming single item orders for now)
-  const firstItem = editableOrder.items && editableOrder.items[0] ? editableOrder.items[0] : null;
+  // Get the current item for display (from flattened structure)
+  const currentItem = order.currentItem || (editableOrder.items && editableOrder.items[0] ? editableOrder.items[0] : null);
+  const isFirstItem = order.isFirstItem || false;
+  const isLastItem = order.isLastItem || false;
+  const totalItemsInOrder = order.totalItemsInOrder || 1;
+  const itemIndex = order.itemIndex || 0;
 
   const getCellValue = (columnKey: string) => {
     switch (columnKey) {
@@ -338,13 +350,27 @@ const OrderRow: React.FC<OrderRowProps> = ({
         });
         return editableOrder.itemImageUrl || '';
       case 'itemNumber':
-        return firstItem?.itemNumber || 'N/A';
+        return currentItem?.itemNumber || 'N/A';
       case 'quantity':
-        return firstItem?.quantity || 0;
+        return currentItem?.quantity || 0;
       case 'price':
-        return firstItem?.unitPrice || 0;
+        return currentItem?.unitPrice || 0;
       case 'total':
-        return firstItem ? (firstItem.unitPrice || 0) * (firstItem.quantity || 0) : 0;
+        return currentItem ? (currentItem.unitPrice || 0) * (currentItem.quantity || 0) : 0;
+      case 'vendor':
+        // Debug vendor data
+        console.log('OrderRow vendor data:', {
+          orderId: editableOrder.id,
+          vendorId: editableOrder.vendorId,
+          vendorIdType: typeof editableOrder.vendorId
+        });
+        
+        if (typeof editableOrder.vendorId === 'string') {
+          return 'Unknown Vendor';
+        } else if (editableOrder.vendorId && editableOrder.vendorId.name) {
+          return editableOrder.vendorId.name;
+        }
+        return 'Unknown Vendor';
       case 'confirmFormShehab':
         return editableOrder.confirmFormShehab || '';
       case 'estimatedDateReady':
@@ -437,16 +463,44 @@ const OrderRow: React.FC<OrderRowProps> = ({
     }
   };
 
+  // Check if order has multiple items
+  const hasMultipleItems = totalItemsInOrder > 1;
+  const itemCount = totalItemsInOrder;
+
+  // Determine row styling based on item position in order
+  let rowStyling = `${isEven ? 'bg-white' : 'bg-gray-50'} ${isSelected ? 'bg-blue-100' : ''} ${isVendorFieldsCompleted() ? 'border-l-4 border-l-green-500' : ''} hover:bg-blue-50`;
+  
+  if (hasMultipleItems) {
+    if (isFirstItem) {
+      rowStyling += ' border-t-2 border-t-orange-400';
+    }
+    if (isLastItem) {
+      rowStyling += ' border-b-2 border-b-orange-400';
+    }
+    if (!isFirstItem && !isLastItem) {
+      rowStyling += ' border-l-2 border-l-orange-300';
+    }
+  }
+
   return (
-    <tr className={`${isEven ? 'bg-white' : 'bg-gray-50'} ${isSelected ? 'bg-blue-100' : ''} ${isVendorFieldsCompleted() ? 'border-l-4 border-l-green-500' : ''} hover:bg-blue-50`}>
+    <tr className={rowStyling}>
       {/* Row number and selection */}
-      <td className="w-12 h-8 border border-gray-300 bg-gray-100 text-center text-xs">
-        <input
-          type="checkbox"
-          checked={isSelected}
-          onChange={onSelect}
-          className="w-3 h-3"
-        />
+      <td className="w-12 h-8 border border-gray-300 bg-gray-100 text-center text-xs relative">
+        <div className="flex flex-col items-center justify-center h-full">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onSelect}
+            className="w-3 h-3"
+          />
+          {hasMultipleItems && (
+            <div className="mt-1">
+              <span className="inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                {itemIndex + 1}/{itemCount}
+              </span>
+            </div>
+          )}
+        </div>
       </td>
 
       {/* Data cells */}
@@ -573,6 +627,27 @@ const OrderRow: React.FC<OrderRowProps> = ({
         const value = getCellValue(column.key);
         const cellType = getCellType(column.key);
         const isEditable = canEditField(column.key as keyof Order);
+
+        // Special handling for item number column to show item position info
+        if (column.key === 'itemNumber' && hasMultipleItems) {
+          return (
+            <td 
+              key={column.key}
+              className="h-8 border border-gray-300 px-2 text-xs bg-orange-50"
+              style={{ width: column.width, minWidth: column.width }}
+              title={`Item ${itemIndex + 1} of ${itemCount} in this order`}
+            >
+              <div className="flex items-center h-full">
+                <span className="font-medium text-orange-800">
+                  {currentItem?.itemNumber || 'N/A'} 
+                </span>
+                <span className="ml-1 text-orange-600 font-semibold">
+                  ({itemIndex + 1}/{itemCount})
+                </span>
+              </div>
+            </td>
+          );
+        }
 
         // Special handling for status column
         if (column.key === 'status') {
