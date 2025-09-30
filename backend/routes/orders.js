@@ -411,6 +411,10 @@ router.put('/:id', [
       if (req.body.itemPriceApprovalRejectionReason !== undefined) {
         itemUpdates[`items.${itemIndex}.priceApprovalRejectionReason`] = req.body.itemPriceApprovalRejectionReason;
       }
+      // Also accept priceApprovalRejectionReason for convenience when itemIndex is provided
+      if (req.body.priceApprovalRejectionReason !== undefined) {
+        itemUpdates[`items.${itemIndex}.priceApprovalRejectionReason`] = req.body.priceApprovalRejectionReason;
+      }
       if (req.body.itemStatus !== undefined) {
         itemUpdates[`items.${itemIndex}.status`] = req.body.itemStatus;
       }
@@ -421,6 +425,38 @@ router.put('/:id', [
         itemUpdates[`items.${itemIndex}.estimatedDateReady`] = req.body.itemEstimatedDateReady;
       }
       
+      // Accept common item-level fields when itemIndex is provided
+      if (req.body.unitPrice !== undefined) {
+        itemUpdates[`items.${itemIndex}.unitPrice`] = typeof req.body.unitPrice === 'string' ? parseFloat(req.body.unitPrice) : req.body.unitPrice;
+      }
+      if (req.body.quantity !== undefined) {
+        itemUpdates[`items.${itemIndex}.quantity`] = typeof req.body.quantity === 'string' ? parseInt(req.body.quantity, 10) : req.body.quantity;
+      }
+      if (req.body.notes !== undefined) {
+        itemUpdates[`items.${itemIndex}.notes`] = req.body.notes;
+      }
+      if (req.body.estimatedDateReady !== undefined) {
+        itemUpdates[`items.${itemIndex}.estimatedDateReady`] = req.body.estimatedDateReady;
+      }
+      if (req.body.confirmFormShehab !== undefined) {
+        itemUpdates[`items.${itemIndex}.confirmFormShehab`] = req.body.confirmFormShehab;
+      }
+      if (req.body.invoiceNumber !== undefined) {
+        itemUpdates[`items.${itemIndex}.invoiceNumber`] = req.body.invoiceNumber;
+      }
+      if (req.body.transferAmount !== undefined) {
+        itemUpdates[`items.${itemIndex}.transferAmount`] = typeof req.body.transferAmount === 'string' ? parseFloat(req.body.transferAmount) : req.body.transferAmount;
+      }
+      if (req.body.shippingDateToAgent !== undefined) {
+        itemUpdates[`items.${itemIndex}.shippingDateToAgent`] = req.body.shippingDateToAgent;
+      }
+      if (req.body.shippingDateToSaudi !== undefined) {
+        itemUpdates[`items.${itemIndex}.shippingDateToSaudi`] = req.body.shippingDateToSaudi;
+      }
+      if (req.body.arrivalDate !== undefined) {
+        itemUpdates[`items.${itemIndex}.arrivalDate`] = req.body.arrivalDate;
+      }
+
       // Apply item-specific updates
       if (Object.keys(itemUpdates).length > 0) {
         console.log('Backend: Applying item-specific updates:', JSON.stringify(itemUpdates, null, 2));
@@ -485,6 +521,12 @@ router.put('/:id', [
         if (req.body.itemPriceApprovalStatus !== undefined) {
           order.items[itemIndex].priceApprovalStatus = req.body.itemPriceApprovalStatus;
         }
+        if (req.body.priceApprovalRejectionReason !== undefined) {
+          order.items[itemIndex].priceApprovalRejectionReason = req.body.priceApprovalRejectionReason;
+        }
+        if (req.body.itemPriceApprovalRejectionReason !== undefined) {
+          order.items[itemIndex].priceApprovalRejectionReason = req.body.itemPriceApprovalRejectionReason;
+        }
         // Update the specific item with the provided fields
         console.log(`Backend: Updating item at index ${itemIndex}`);
         console.log(`Backend: Item before update:`, JSON.stringify(order.items[itemIndex], null, 2));
@@ -513,10 +555,10 @@ router.put('/:id', [
         console.log('Backend: Marked items array as modified');
         
         // Recalculate totalPrice for the item if quantity or unitPrice changed
-        if (order.items[itemIndex].quantity && order.items[itemIndex].unitPrice) {
-          order.items[itemIndex].totalPrice = order.items[itemIndex].quantity * order.items[itemIndex].unitPrice;
-          console.log(`Backend: Recalculated totalPrice for item ${itemIndex}:`, order.items[itemIndex].totalPrice);
-        }
+        const qtyVal = Number(order.items[itemIndex].quantity) || 0;
+        const unitPriceVal = Number(order.items[itemIndex].unitPrice) || 0;
+        order.items[itemIndex].totalPrice = qtyVal * unitPriceVal;
+        console.log(`Backend: Recalculated totalPrice for item ${itemIndex}:`, order.items[itemIndex].totalPrice);
         
         // Recalculate order total amount
         order.totalAmount = order.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
