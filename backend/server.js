@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
@@ -17,6 +18,8 @@ const fieldConfigRoutes = require('./routes/fieldConfigs');
 const demandRoutes = require('./routes/demands');
 
 const app = express();
+// Create server with Express app (standard Socket.IO integration)
+const server = http.createServer(app);
 const PORT = process.env.PORT || 4031;
 
 // Middleware
@@ -207,8 +210,40 @@ app.use('*', (req, res) => {
   });
 });
 
+// Socket.IO setup
+let io;
+try {
+  const { Server } = require('socket.io');
+  const allowedOrigins = [
+    process.env.FRONTEND_URL || 'http://localhost:5173',
+    'https://crm.fikra.solutions',
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ];
+  io = new Server(server, {
+    cors: {
+      // Accept any origin to avoid cross-tab origin issues during development or multi-host setups
+      origin: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+      credentials: true
+    }
+  });
+
+  io.on('connection', (socket) => {
+    console.log('🔌 Socket connected:', socket.id);
+    socket.on('disconnect', () => {
+      console.log('🔌 Socket disconnected:', socket.id);
+    });
+  });
+
+  // Make io available in routes
+  app.set('io', io);
+} catch (e) {
+  console.warn('Socket.IO not initialized. Install it with "npm i socket.io".');
+}
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);

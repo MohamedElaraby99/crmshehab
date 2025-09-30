@@ -429,7 +429,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             >
               <option value="all">All Vendors</option>
               {uniqueVendors.map(vendor => (
-                <option key={vendor.id} value={vendor.id}>
+                <option key={`${vendor.id}-${vendor.name}`} value={vendor.id}>
                   {vendor.name}
                 </option>
               ))}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Order, Vendor, Product, ProductPurchase } from '../types';
-import { getAllOrders, updateOrder as apiUpdateOrder, getAllVendors, getAllProducts, getProductPurchases } from '../services/api';
+import { getAllOrders, updateOrder as apiUpdateOrder, getAllVendors, getAllProducts, getProductPurchases, getSocket } from '../services/api';
 import OrderTable from './OrderTable';
 import ProductHistoryModal from './ProductHistoryModal';
 import DynamicOrderForm from './DynamicOrderForm';
@@ -29,7 +29,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
         getAllVendors(),
         getAllProducts()
       ]);
-      setOrders(ordersData);
+      // Ensure each order has an 'id' field
+      const ordersWithId = (ordersData || []).map((o: any) => ({ ...o, id: o.id || o._id }));
+      setOrders(ordersWithId);
       setVendors(vendorsData);
       setProducts(productsData);
     } catch (error) {
@@ -44,6 +46,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchOrders();
+  }, []);
+
+  // Realtime updates (Socket.IO)
+  useEffect(() => {
+    const socket = getSocket();
+    const handleCreated = (order: Order) => {
+      setOrders(prev => {
+        const exists = prev.some(o => o.id === (order as any).id || (o as any)._id === (order as any)._id);
+        if (exists) return prev.map(o => (o.id === (order as any).id ? order : o));
+        return [order, ...prev];
+      });
+    };
+    const handleUpdated = (order: any) => {
+      const hasFullData = Array.isArray(order?.items);
+      if (!hasFullData) {
+        fetchOrders();
+        return;
+      }
+      const incomingId = order?.id || order?._id;
+      const normalized = { ...order, id: incomingId } as Order;
+      setOrders(prev => prev.map(o => (o.id === incomingId ? normalized : o)));
+    };
+    const handleDeleted = (payload: { id: string }) => {
+      setOrders(prev => prev.filter(o => o.id !== payload.id));
+    };
+
+    socket.on('orders:created', handleCreated);
+    socket.on('orders:updated', handleUpdated);
+    socket.on('orders:deleted', handleDeleted);
+
+    return () => {
+      socket.off('orders:created', handleCreated);
+      socket.off('orders:updated', handleUpdated);
+      socket.off('orders:deleted', handleDeleted);
+    };
   }, []);
 
   const handleUpdateOrder = async (updatedOrder: Order | Partial<Order>) => {

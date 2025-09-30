@@ -1,4 +1,5 @@
 import { User, Order, Product, Vendor, ProductPurchase, Demand } from '../types';
+import { io, Socket } from 'socket.io-client';
 
 const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4031/api';
 
@@ -10,6 +11,29 @@ export const getApiOrigin = (): string => {
   // Strip a trailing "/api" or "/api/"
   base = base.replace(/\/api\/?$/, '');
   return base.replace(/\/$/, '');
+};
+
+// Socket.IO client (singleton)
+let socketInstance: Socket | null = null;
+export const getSocket = (): Socket => {
+  if (socketInstance) return socketInstance;
+  const origin = getApiOrigin();
+  socketInstance = io(origin, {
+    // Force long-polling to avoid websocket failures in constrained environments
+    transports: ['polling'],
+    upgrade: false,
+    withCredentials: true,
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 500,
+    timeout: 10000,
+    path: '/socket.io',
+  });
+  socketInstance.on('connect', () => console.log('Socket connected', socketInstance?.id));
+  socketInstance.on('disconnect', () => console.log('Socket disconnected'));
+  ;(window as any).socket = socketInstance; // expose for debugging
+  return socketInstance;
 };
 
 // Helper function to get auth token

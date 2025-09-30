@@ -323,6 +323,12 @@ router.post('/', [
       });
     }
 
+    // Emit socket event for new order
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('orders:created', orderObj);
+    } catch {}
+
     res.status(201).json({ success: true, data: orderObj });
   } catch (error) {
     console.error('Create order error:', error);
@@ -703,6 +709,12 @@ router.put('/:id', [
       });
     }
 
+    // Emit socket event for order update
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('orders:updated', orderObj);
+    } catch {}
+
     res.json({ success: true, message: 'Order updated successfully', data: orderObj });
   } catch (error) {
     console.error('Update order error:', error);
@@ -726,6 +738,10 @@ router.delete('/:id', authenticateUserOrVendor, async (req, res) => {
 
     await Order.findByIdAndUpdate(req.params.id, { isActive: false }, { new: true });
 
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('orders:deleted', { id: req.params.id });
+    } catch {}
     res.json({ success: true, message: 'Order deleted successfully' });
   } catch (error) {
     console.error('Delete order error:', error);
@@ -926,6 +942,12 @@ router.post('/:id/confirm-item', authenticateUserOrVendor, async (req, res) => {
       });
     }
     
+    // Emit socket event for order update after item confirmation
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('orders:updated', orderObj);
+    } catch {}
+
     res.json({ 
       success: true, 
       message: `Item confirmed and ${item.quantity} units added to stock`,
@@ -1006,6 +1028,34 @@ router.post('/:id/item/:itemIndex/image', [authenticateUserOrVendor, upload.sing
     
     console.log('Order saved successfully with item image');
 
+    // Fetch the updated order to emit a full payload
+    let fullAfterItemImage = null;
+    try {
+      const o = await Order.findById(order._id).populate([
+        { path: 'vendorId', select: 'name contactPerson email' },
+        { path: 'items.productId', select: 'name itemNumber' }
+      ]);
+      if (o) {
+        const oObj = o.toObject();
+        if (oObj.imagePath && !oObj.itemImageUrl) oObj.itemImageUrl = oObj.imagePath;
+        if (oObj.itemImageUrl && !oObj.imagePath) oObj.imagePath = oObj.itemImageUrl;
+        if (oObj.items && Array.isArray(oObj.items)) {
+          oObj.items = oObj.items.map(it => {
+            if (it.imagePath && !it.itemImageUrl) it.itemImageUrl = it.imagePath;
+            if (it.itemImageUrl && !it.imagePath) it.imagePath = it.itemImageUrl;
+            return it;
+          });
+        }
+        fullAfterItemImage = oObj;
+      }
+    } catch {}
+
+    // Emit socket event for order update due to item image upload (full payload when possible)
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('orders:updated', fullAfterItemImage || { id: order._id, itemIndex, itemImageUrl: imagePath, imagePath });
+    } catch {}
+
     res.json({ 
       success: true, 
       message: 'Item image uploaded successfully',
@@ -1071,6 +1121,34 @@ router.post('/:id/image', [authenticateUserOrVendor, upload.single('image')], as
     await order.save();
     
     console.log('Order saved successfully');
+
+    // Fetch the updated order to emit a full payload
+    let fullAfterOrderImage = null;
+    try {
+      const o = await Order.findById(order._id).populate([
+        { path: 'vendorId', select: 'name contactPerson email' },
+        { path: 'items.productId', select: 'name itemNumber' }
+      ]);
+      if (o) {
+        const oObj = o.toObject();
+        if (oObj.imagePath && !oObj.itemImageUrl) oObj.itemImageUrl = oObj.imagePath;
+        if (oObj.itemImageUrl && !oObj.imagePath) oObj.imagePath = oObj.itemImageUrl;
+        if (oObj.items && Array.isArray(oObj.items)) {
+          oObj.items = oObj.items.map(it => {
+            if (it.imagePath && !it.itemImageUrl) it.itemImageUrl = it.imagePath;
+            if (it.itemImageUrl && !it.imagePath) it.imagePath = it.itemImageUrl;
+            return it;
+          });
+        }
+        fullAfterOrderImage = oObj;
+      }
+    } catch {}
+
+    // Emit socket event for order update due to order image upload (full payload when possible)
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('orders:updated', fullAfterOrderImage || { id: order._id, itemImageUrl: imagePath, imagePath });
+    } catch {}
 
     res.json({ 
       success: true, 

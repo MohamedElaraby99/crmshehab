@@ -417,6 +417,12 @@ router.post('/', [
 
     await product.save();
 
+    // Emit socket event for product creation
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('products:created', normalizeProduct(product));
+    } catch {}
+
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
@@ -484,6 +490,12 @@ router.put('/:id', [
     // Ensure visibleToClients is present in response
     obj.visibleToClients = typeof obj.visibleToClients === 'boolean' ? obj.visibleToClients : true;
 
+    // Emit socket event for product update
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('products:updated', obj);
+    } catch {}
+
     res.json({
       success: true,
       message: 'Product updated successfully',
@@ -513,6 +525,11 @@ router.delete('/:id', authenticateUser, requireAdmin, async (req, res) => {
         message: 'Product not found'
       });
     }
+
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('products:deleted', { id: req.params.id });
+    } catch {}
 
     res.json({
       success: true,

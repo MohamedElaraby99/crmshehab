@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Order, Vendor, Product } from '../types';
-import { getAllOrders, createOrder, updateOrder, deleteOrder, getAllVendors, getAllProducts, getAllFieldConfigs, FieldConfig, createProduct, updateProduct, uploadProductImage, getApiOrigin } from '../services/api';
+import { getAllOrders, createOrder, updateOrder, deleteOrder, getAllVendors, getAllProducts, getAllFieldConfigs, FieldConfig, createProduct, updateProduct, uploadProductImage, getApiOrigin, getSocket } from '../services/api';
 import DynamicOrderForm from './DynamicOrderForm';
 import FieldConfigManager from './FieldConfigManager';
 import { OrderFieldConfig } from '../data/orderFieldConfig';
@@ -26,6 +26,40 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
 
   useEffect(() => {
     fetchData();
+    // Realtime updates
+    const socket = getSocket();
+    const handleCreated = (order: Order) => {
+      setOrders(prev => {
+        const incomingId = (order as any).id || (order as any)._id;
+        const exists = prev.some(o => o.id === incomingId);
+        if (exists) return prev.map(o => (o.id === incomingId ? order : o));
+        return [order, ...prev];
+      });
+    };
+    const handleUpdated = (order: any) => {
+      const hasFullData = Array.isArray(order?.items);
+      if (!hasFullData) {
+        // If event is partial, refetch to keep state consistent
+        fetchData();
+        return;
+      }
+      const incomingId = order?.id || order?._id;
+      const normalized = { ...order, id: incomingId } as Order;
+      setOrders(prev => prev.map(o => (o.id === incomingId ? normalized : o)));
+    };
+    const handleDeleted = (payload: { id: string }) => {
+      setOrders(prev => prev.filter(o => o.id !== payload.id));
+    };
+
+    socket.on('orders:created', handleCreated);
+    socket.on('orders:updated', handleUpdated);
+    socket.on('orders:deleted', handleDeleted);
+
+    return () => {
+      socket.off('orders:created', handleCreated);
+      socket.off('orders:updated', handleUpdated);
+      socket.off('orders:deleted', handleDeleted);
+    };
   }, []);
 
   const fetchData = async () => {
