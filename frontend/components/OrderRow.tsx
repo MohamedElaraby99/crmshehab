@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Order } from '../types';
 import { SUPPLIER_EDITABLE_FIELDS, VENDOR_EDITABLE_ITEM_FIELDS } from '../data/mockData';
 import { ORDER_FIELD_CONFIGS, OrderFieldConfig } from '../data/orderFieldConfig';
-import { uploadOrderImage, uploadOrderItemImage, getApiOrigin, updateOrder, confirmOrderItem } from '../services/api';
+import { uploadOrderImage, uploadOrderItemImage, getApiOrigin, updateOrder, confirmOrderItem, transferOrderItemQuantity } from '../services/api';
 
 interface OrderRowProps {
   order: Order & { 
@@ -470,11 +470,13 @@ const OrderRow: React.FC<OrderRowProps> = ({
   const getCellValue = (columnKey: string) => {
     switch (columnKey) {
       case 'itemImage':
-        // Get only item-specific image, no fallback to order-level
-        const itemImage = currentItem?.itemImageUrl || currentItem?.imagePath || '';
+        // Prefer item image, fallback to order-level image if item image is missing
+        const itemImage = currentItem?.itemImageUrl || currentItem?.imagePath || (order as any).itemImageUrl || (order as any).imagePath || '';
         console.log('Item image for item', order.itemIndex, ':', {
-          itemImageUrl: currentItem?.itemImageUrl,
-          imagePath: currentItem?.imagePath,
+          itemItemImageUrl: currentItem?.itemImageUrl,
+          itemImagePath: currentItem?.imagePath,
+          orderItemImageUrl: (order as any).itemImageUrl,
+          orderImagePath: (order as any).imagePath,
           finalImage: itemImage
         });
         return itemImage;
@@ -749,6 +751,34 @@ const OrderRow: React.FC<OrderRowProps> = ({
                     <option value="delivered">DELIVERED</option>
                     <option value="cancelled">CANCELLED</option>
                   </select>
+                )}
+
+                {/* Vendor-only: Transfer quantity to new order */}
+                {!userIsAdmin && currentItem && (currentItem.status !== 'confirmed') && (
+                  <button
+                    onClick={async () => {
+                      const maxQty = currentItem.quantity || 0;
+                      const input = prompt(`Enter quantity to transfer (1 - ${maxQty}):`);
+                      if (!input) return;
+                      const qty = parseInt(input, 10);
+                      if (!Number.isFinite(qty) || qty < 1 || qty > maxQty) {
+                        alert('Invalid quantity');
+                        return;
+                      }
+                      const notes = prompt('New order notes (optional):') || '';
+                      const result = await transferOrderItemQuantity(editableOrder.id, order.itemIndex || 0, qty, { notes });
+                      if (result.success && result.data) {
+                        onUpdate(result.data.updatedOrder);
+                        alert(`Transferred ${qty} to new order ${result.data.newOrder.orderNumber || result.data.newOrder.id}`);
+                      } else {
+                        alert(result.message || 'Transfer failed');
+                      }
+                    }}
+                    className="text-xs text-purple-600 hover:text-purple-800 px-1"
+                    title="Transfer quantity to a new order"
+                  >
+                    ↪
+                  </button>
                 )}
 
                 {/* Admin-only: Delete Item button */}

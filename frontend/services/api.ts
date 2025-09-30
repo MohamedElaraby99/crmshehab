@@ -616,6 +616,25 @@ export const confirmOrderItem = async (orderId: string, itemIndex: number, quant
   }
 };
 
+// Transfer a quantity from an order item into a new order (vendor)
+export const transferOrderItemQuantity = async (
+  orderId: string,
+  itemIndex: number,
+  transferQuantity: number,
+  newOrder?: { notes?: string; expectedDeliveryDate?: string; confirmFormShehab?: string; price?: number; shippingAddress?: any }
+): Promise<{ success: boolean; data?: { updatedOrder: Order; newOrder: Order }; message?: string }> => {
+  try {
+    const response = await apiRequest(`/orders/${encodeURIComponent(orderId)}/items/${itemIndex}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ transferQuantity, newOrder })
+    });
+    return response;
+  } catch (error: any) {
+    console.error('Transfer item quantity failed:', error);
+    return { success: false, message: error?.message || 'Network error' };
+  }
+};
+
 // Product Purchase functions
 export const getProductPurchases = async (productId: string): Promise<ProductPurchase[]> => {
   try {

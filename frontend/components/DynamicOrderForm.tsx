@@ -34,6 +34,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   const [fieldConfigs, setFieldConfigs] = useState<OrderFieldConfig[]>(ORDER_FIELD_CONFIGS);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [productFilters, setProductFilters] = useState<Record<string, string>>({});
 
   // Load field configurations
   useEffect(() => {
@@ -574,78 +575,30 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                           <div className="md:col-span-3">
                             <label className="block text-xs font-medium text-gray-700 mb-1">
                               Select Product *
-                  </label>
-                            {item.itemNumber === 'custom' ? (
-                              <div className="space-y-2">
-                                <select
-                                  value="custom"
-                                  onChange={(e) => {
-                                    if (e.target.value !== 'custom') {
-                                      const selectedProduct = products.find(p => p.itemNumber === e.target.value);
-                                      if (selectedProduct) {
-                                        updateItem(item.id, 'itemNumber', selectedProduct.itemNumber);
-                                        updateItem(item.id, 'productName', selectedProduct.name);
-                                      }
-                                    }
-                                  }}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                                >
-                                  <option value="">Choose existing product...</option>
-                                  {products.map(product => (
-                                    <option key={product.id} value={product.itemNumber}>
-                                      {product.itemNumber} - {product.name}
-                                    </option>
-                                  ))}
-                                  <option value="custom">--- Custom Item ---</option>
-                                </select>
-                                <input
-                                  type="text"
-                                  value={item.itemNumber === 'custom' ? '' : item.itemNumber}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    console.log(`Custom item ${index} onChange:`, value);
-                                    updateItem(item.id, 'itemNumber', value);
-                                  }}
-                                  className={`w-full px-3 py-2 border rounded-md text-sm ${
-                                    errors[`item_${index}_itemNumber`] 
-                                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
-                                      : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                                  }`}
-                                  placeholder="Enter custom item number"
-                                />
-                              </div>
-                            ) : (
-                  <select
-                                value={item.itemNumber}
-                    onChange={(e) => {
-                                  if (e.target.value === 'custom') {
-                                    updateItem(item.id, 'itemNumber', 'custom');
-                                    updateItem(item.id, 'productName', '');
-                                  } else {
-                                    const selectedProduct = products.find(p => p.itemNumber === e.target.value);
-                                    if (selectedProduct) {
-                                      updateItem(item.id, 'itemNumber', selectedProduct.itemNumber);
-                                      updateItem(item.id, 'productName', selectedProduct.name);
-                                    } else {
-                                      updateItem(item.id, 'itemNumber', e.target.value);
-                                    }
-                                  }
-                                }}
-                                className={`w-full px-3 py-2 border rounded-md text-sm ${
-                                  errors[`item_${index}_itemNumber`] 
-                                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
-                                    : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                                }`}
-                              >
-                                <option value="">Choose existing product...</option>
-                    {products.map(product => (
-                                  <option key={product.id} value={product.itemNumber}>
-                        {product.itemNumber} - {product.name}
-                      </option>
-                    ))}
-                                <option value="custom">--- Custom Item ---</option>
-                  </select>
-                            )}
+                            </label>
+                            <input
+                              list={`products-${item.id}`}
+                              value={item.itemNumber}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateItem(item.id, 'itemNumber', val);
+                                const selected = products.find(p => p.itemNumber === val);
+                                if (selected) {
+                                  updateItem(item.id, 'productName', selected.name);
+                                }
+                              }}
+                              placeholder="Type to search existing products or enter custom item number"
+                              className={`w-full px-3 py-2 border rounded-md text-sm ${
+                                errors[`item_${index}_itemNumber`] 
+                                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                              }`}
+                            />
+                            <datalist id={`products-${item.id}`}>
+                              {products.map(product => (
+                                <option key={product.id} value={product.itemNumber}>{product.name}</option>
+                              ))}
+                            </datalist>
                             {errors[`item_${index}_itemNumber`] && (
                               <p className="text-xs text-red-600 mt-1">{errors[`item_${index}_itemNumber`]}</p>
                             )}

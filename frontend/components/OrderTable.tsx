@@ -46,8 +46,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'actions', label: 'ACTIONS', width: 120, type: 'actions' }
   ];
 
-  // Filter columns based on user role - vendors don't see actions and vendor columns
-  const columns = userIsAdmin ? allColumns : allColumns.filter(col => col.key !== 'actions' && col.key !== 'vendor');
+  // Filter columns based on user role - vendors don't see vendor column
+  const columns = userIsAdmin ? allColumns : allColumns.filter(col => col.key !== 'vendor');
 
   // Ensure orders is always an array
   const safeOrders = Array.isArray(orders) ? orders : [];
