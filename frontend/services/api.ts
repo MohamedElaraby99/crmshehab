@@ -650,6 +650,67 @@ export const getAllDemands = async (): Promise<Demand[]> => {
   }
 };
 
+export const getMyDemands = async (): Promise<Demand[]> => {
+  try {
+    const response = await apiRequest('/demands/mine');
+    return response?.success ? response.data : [];
+  } catch (error) {
+    console.error('Get my demands failed:', error);
+    return [];
+  }
+};
+
+// WhatsApp Recipients API (admin)
+export interface WhatsAppRecipient { id: string; phone: string; name?: string; createdAt: string }
+
+export const getWhatsAppRecipients = async (): Promise<WhatsAppRecipient[]> => {
+  try {
+    const response = await apiRequest('/whatsapp-recipients');
+    const list = response?.success ? (response.data || []) : [];
+    return list.map((r: any) => ({ ...r, id: r.id || r._id }));
+  } catch (error) {
+    console.error('Get WhatsApp recipients failed:', error);
+    return [];
+  }
+};
+
+export const createWhatsAppRecipient = async (payload: { phone: string; name?: string }): Promise<WhatsAppRecipient | null> => {
+  try {
+    const response = await apiRequest('/whatsapp-recipients', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return response?.success ? { ...(response.data || {}), id: response.data?.id || response.data?._id } : null;
+  } catch (error) {
+    console.error('Create WhatsApp recipient failed:', error);
+    return null;
+  }
+};
+
+export const deleteWhatsAppRecipient = async (id: string): Promise<boolean> => {
+  try {
+    const response = await apiRequest(`/whatsapp-recipients/${id}`, {
+      method: 'DELETE'
+    });
+    return !!response?.success;
+  } catch (error) {
+    console.error('Delete WhatsApp recipient failed:', error);
+    return false;
+  }
+};
+export const updateDemandStatus = async (id: string, status: 'pending' | 'confirmed' | 'rejected'): Promise<Demand | null> => {
+  try {
+    const response = await apiRequest(`/demands/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status })
+    });
+    return response?.success ? response.data : null;
+  } catch (error) {
+    console.error('Update demand status failed:', error);
+    return null;
+  }
+};
+
 export const getAllProductPurchases = async (): Promise<ProductPurchase[]> => {
   try {
     const response = await apiRequest('/product-purchases');

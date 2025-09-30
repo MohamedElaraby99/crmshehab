@@ -26,7 +26,7 @@ router.post('/', [
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    const demand = await Demand.create({ productId, userId: req.user._id, quantity, notes });
+    const demand = await Demand.create({ productId, userId: req.user._id, quantity, notes, status: 'pending' });
     // Socket notifications for admins
     try {
       const io = req.app.get('io');
@@ -70,6 +70,79 @@ router.get('/', authenticateUser, async (req, res) => {
     res.json({ success: true, data: list });
   } catch (error) {
     console.error('List demands error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// List current user's demands (client/vendor)
+router.get('/mine', authenticateUser, async (req, res) => {
+  try {
+    const list = await Demand.find({ userId: req.user._id })
+      .sort({ createdAt: -1 })
+      .populate('productId', 'name itemNumber');
+    res.json({ success: true, data: list });
+  } catch (error) {
+    console.error('List my demands error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Update demand status (admin)
+router.put('/:id/status', authenticateUser, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+    const { status } = req.body;
+    if (!['pending', 'confirmed', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+    // Find existing for previous status and details
+    const existing = await Demand.findById(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Demand not found' });
+
+    // Track previous status, then update
+    const prevStatus = existing.status;
+    existing.status = status;
+    await existing.save();
+    const demand = await Demand.findById(existing._id).populate('productId', 'name itemNumber').populate('userId', 'username');
+    if (!demand) return res.status(404).json({ success: false, message: 'Demand not found' });
+
+    // Adjust product stock on confirmation transitions
+    try {
+      const Product = require('../models/Product');
+      // Reduce stock when moving into confirmed
+      if (status === 'confirmed' && prevStatus !== 'confirmed' && existing.productId) {
+        await Product.findByIdAndUpdate(existing.productId, { $inc: { stock: -(existing.quantity || 0) } });
+      }
+      // Optional rollback: if moving out of confirmed, restore stock
+      if (prevStatus === 'confirmed' && status !== 'confirmed' && existing.productId) {
+        await Product.findByIdAndUpdate(existing.productId, { $inc: { stock: (existing.quantity || 0) } });
+      }
+    } catch (e) {
+      console.error('Demand stock adjustment error:', e);
+    }
+
+    // Emit socket events
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('demands:updated', demand);
+        io.emit('notifications:push', {
+          type: 'demand_' + status,
+          demandId: demand._id,
+          message: `Demand ${status}`,
+          at: new Date().toISOString()
+        });
+        // Also notify product updates for client/admin views
+        const pid = demand && demand.productId && demand.productId._id ? demand.productId._id : demand.productId;
+        io.emit('products:updated', { id: pid });
+      }
+    } catch {}
+
+    return res.json({ success: true, data: demand });
+  } catch (error) {
+    console.error('Update demand status error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

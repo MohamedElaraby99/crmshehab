@@ -647,9 +647,9 @@ router.put('/:id', [
     const leftConfirmed = previousStatus === 'confirmed' && newStatus !== 'confirmed';
 
     if (isNowConfirmed && !order.stockAdjusted) {
-      // Increase stock for each item
+      // Decrease stock for each item (client order accepted)
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: item.quantity } });
+        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -(item.quantity || 0) } });
       }
       // Create purchase records
       const populatedVendor = await Order.findById(order._id).populate({ path: 'vendorId', select: 'name' });
@@ -673,9 +673,9 @@ router.put('/:id', [
       order.stockAdjusted = true;
       await order.save();
     } else if (leftConfirmed && order.stockAdjusted) {
-      // Rollback stock for each item
+      // Rollback stock for each item (restore)
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.quantity } });
+        await Product.findByIdAndUpdate(item.productId, { $inc: { stock: (item.quantity || 0) } });
       }
       // Remove purchase records for this order
       await ProductPurchase.deleteMany({ orderId: order._id });

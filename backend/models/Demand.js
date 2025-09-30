@@ -22,6 +22,12 @@ const demandSchema = new mongoose.Schema({
     trim: true,
     maxlength: 500
   },
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'rejected'],
+    default: 'pending',
+    index: true
+  },
   createdAt: {
     type: Date,
     default: Date.now

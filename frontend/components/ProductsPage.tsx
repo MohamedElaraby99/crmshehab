@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Product, ProductPurchase, User } from '../types';
-import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket } from '../services/api';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, getMyDemands } from '../services/api';
 import { createDemand } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
@@ -21,6 +21,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<Array<{ id: string; name: string; itemNumber: string; price: number; quantity: number }>>([]);
+  const [myDemands, setMyDemands] = useState<any[]>([]);
 
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
   const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
@@ -129,11 +130,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [allProducts, allOrders] = await Promise.all([
+      const [allProducts, allOrders, mine] = await Promise.all([
         userIsClient ? getVisibleProducts() : getAllProducts(),
-        getAllOrders()
+        getAllOrders(),
+        userIsClient ? getMyDemands() : Promise.resolve([])
       ]);
       setProducts(allProducts);
+      setMyDemands(mine || []);
 
       const imgMap: Record<string, string> = {};
       (allProducts || []).forEach((p: any) => {
@@ -285,6 +288,51 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
           )}
         </div>
       </div>
+
+      {userIsClient && (
+        <div className="mb-6 bg-white shadow overflow-hidden sm:rounded-md">
+          <div className="px-4 py-5 sm:p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Your Demand History</h3>
+              <span className="text-xs text-gray-500">{myDemands.length} total</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item #</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {myDemands.map((d, idx) => {
+                    const p = d.productId;
+                    const name = typeof p === 'string' ? (products.find(pp => (pp as any).id === p)?.name || p) : (p?.name || '');
+                    const item = typeof p === 'string' ? (products.find(pp => (pp as any).id === p)?.itemNumber || '') : (p?.itemNumber || '');
+                    const st = String(d.status || 'pending').toLowerCase();
+                    const cls = st === 'confirmed' ? 'bg-green-100 text-green-800' : st === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
+                    return (
+                      <tr key={`${d._id || d.id || idx}`}>
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{new Date(d.createdAt).toLocaleString()}</td>
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{name}</td>
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{item}</td>
+                        <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">{d.quantity}</td>
+                        <td className="px-6 py-2 whitespace-nowrap text-sm"><span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${cls}`}>{st.toUpperCase()}</span></td>
+                      </tr>
+                    );
+                  })}
+                  {myDemands.length === 0 && (
+                    <tr><td className="px-6 py-4 text-sm text-gray-500" colSpan={5}>No demand history yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-6">

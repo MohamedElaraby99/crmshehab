@@ -112,7 +112,7 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({
                       ${purchase.totalAmount.toFixed(2)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {purchase.orderId || 'N/A'}
+                      {typeof purchase.orderId === 'object' ? (purchase as any).orderId?.orderNumber || (purchase as any).orderId?.id || 'N/A' : (purchase.orderId || 'N/A')}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {purchase.notes || 'No notes'}

@@ -16,6 +16,7 @@ const orderRoutes = require('./routes/orders');
 const productPurchaseRoutes = require('./routes/productPurchases');
 const fieldConfigRoutes = require('./routes/fieldConfigs');
 const demandRoutes = require('./routes/demands');
+const whatsappRecipientRoutes = require('./routes/whatsappRecipients');
 
 const app = express();
 // Create server with Express app (standard Socket.IO integration)
@@ -151,6 +152,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/product-purchases', productPurchaseRoutes);
 app.use('/api/field-configs', fieldConfigRoutes);
 app.use('/api/demands', demandRoutes);
+app.use('/api/whatsapp-recipients', whatsappRecipientRoutes);
 
 // Static files for uploads (folder name: 'upload')
 const uploadDir = path.join(__dirname, 'upload');
