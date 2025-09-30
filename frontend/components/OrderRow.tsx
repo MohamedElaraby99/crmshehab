@@ -482,9 +482,17 @@ const OrderRow: React.FC<OrderRowProps> = ({
                 )}
                 
                 <button
-                  onClick={() => onDelete(order.id)}
+                  onClick={() => {
+                    if (order.id) {
+                      onDelete(order.id);
+                    } else {
+                      console.error('Cannot delete order: missing ID', order);
+                      alert('Cannot delete order: missing ID');
+                    }
+                  }}
                   className="text-xs text-red-600 hover:text-red-800 px-1"
                   title="Delete"
+                  disabled={!order.id}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />

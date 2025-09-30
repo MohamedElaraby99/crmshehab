@@ -470,10 +470,15 @@ export const getOrdersByVendorId = async (vendorId: string, searchParams?: { sea
 
 export const createOrder = async (order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Promise<Order | null> => {
   try {
+    console.log('API: createOrder called with:', order);
+    console.log('API: Sending POST request to /orders');
+    
     const response = await apiRequest('/orders', {
       method: 'POST',
       body: JSON.stringify(order),
     });
+    
+    console.log('API: createOrder response:', response);
     return response.success ? response.data : null;
   } catch (error) {
     console.error('Create order failed:', error);

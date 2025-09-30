@@ -357,7 +357,7 @@ router.post('/', [
   requireAdmin,
   body('itemNumber').trim().isLength({ min: 1 }).withMessage('Item number is required'),
   body('name').trim().isLength({ min: 1 }).withMessage('Name is required'),
-  body('description').trim().isLength({ min: 1 }).withMessage('Description is required'),
+  body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty if provided'),
   body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
   body('stock').optional().isInt({ min: 0 }).withMessage('stock must be >= 0'),
   body('visibleToClients').optional().isBoolean().withMessage('visibleToClients must be boolean')

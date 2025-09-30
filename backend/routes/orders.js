@@ -100,7 +100,7 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
 
     // Transform orders to include itemImageUrl for frontend compatibility
     const transformedOrders = orders.map(order => {
-      const orderObj = order.toObject();
+      const orderObj = order.toJSON();
       
       // Debug logging
       console.log('Transforming order:', {
@@ -214,7 +214,7 @@ router.post('/', [
     ]);
 
     // Transform order to include itemImageUrl for frontend compatibility
-    const orderObj = order.toObject();
+    const orderObj = order.toJSON();
     
     // ALWAYS ensure both fields exist for consistency
     if (orderObj.imagePath && !orderObj.itemImageUrl) {
@@ -393,7 +393,7 @@ router.get('/vendor/:vendorId', authenticateVendor, async (req, res) => {
 
     // Transform orders to include itemImageUrl for frontend compatibility
     const transformedOrders = orders.map(order => {
-      const orderObj = order.toObject();
+      const orderObj = order.toJSON();
       
       // ALWAYS ensure both fields exist for consistency
       if (orderObj.imagePath && !orderObj.itemImageUrl) {

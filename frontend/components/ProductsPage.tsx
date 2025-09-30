@@ -660,10 +660,18 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
     const productData: any = {
       itemNumber: formData.itemNumber,
       name: formData.name,
-      description: formData.description,
     };
+    
+    // Only include description if it's not empty
+    if (formData.description && formData.description.trim()) {
+      productData.description = formData.description;
+    }
+    
     if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
       productData.sellingPrice = formData.sellingPrice;
+    }
+    if (typeof formData.stock === 'number' && !Number.isNaN(formData.stock)) {
+      productData.stock = formData.stock;
     }
     productData.visibleToClients = !!formData.visibleToClients;
     if (product) {

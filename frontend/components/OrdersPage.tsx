@@ -35,7 +35,33 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
         getAllProducts(),
         getAllFieldConfigs()
       ]);
-      setOrders(allOrders);
+      // Debug logging for orders and fix ID mapping
+      console.log('Fetched orders:', allOrders.length);
+      const ordersWithFixedIds = allOrders.map((order, index) => {
+        // Ensure order has proper id field (map _id to id if needed)
+        if (!order.id && order._id) {
+          console.log(`Fixing ID for order ${index}:`, {
+            orderNumber: order.orderNumber,
+            _id: order._id,
+            id: order.id
+          });
+          return { ...order, id: order._id };
+        }
+        return order;
+      });
+      
+      ordersWithFixedIds.forEach((order, index) => {
+        if (!order.id || order.id === 'undefined') {
+          console.warn(`Order ${index} still has invalid ID after fix:`, {
+            order,
+            id: order.id,
+            _id: order._id,
+            orderNumber: order.orderNumber
+          });
+        }
+      });
+      
+      setOrders(ordersWithFixedIds);
       setVendors(allVendors);
       setProducts(allProducts);
       
@@ -65,12 +91,20 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
   };
 
   const handleCreateOrder = async (orderData: any) => {
+    console.log('OrdersPage: handleCreateOrder called with:', orderData);
+    
     // Optimistic UX: close modal immediately
     setShowModal(false);
+    console.log('OrdersPage: Modal closed, calling createOrder API...');
+    
     try {
       const created = await createOrder(orderData);
+      console.log('OrdersPage: createOrder API response:', created);
+      
       if (created) {
+        console.log('OrdersPage: Order created successfully, refreshing data...');
         await fetchData();
+        console.log('OrdersPage: Data refreshed successfully');
       } else {
         // Reopen if creation failed silently
         console.error('Create order returned null response');
@@ -135,14 +169,33 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
   };
 
   const handleDeleteOrder = async (id: string) => {
+    // Comprehensive ID validation
+    if (!id || 
+        id === 'undefined' || 
+        id === 'null' || 
+        id === '' || 
+        typeof id !== 'string' ||
+        id.trim() === '') {
+      console.error('Cannot delete order: invalid ID', {
+        id,
+        type: typeof id,
+        length: id?.length
+      });
+      alert('Cannot delete order: invalid ID');
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this order?')) {
       try {
         const deleted = await deleteOrder(id);
         if (deleted) {
           await fetchData();
+        } else {
+          alert('Failed to delete order');
         }
       } catch (error) {
         console.error('Failed to delete order:', error);
+        alert('Failed to delete order. Please try again.');
       }
     }
   };

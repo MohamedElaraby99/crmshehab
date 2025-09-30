@@ -106,13 +106,15 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
       setFormData(initialData);
       
       // Start with one empty item
-      setOrderItems([{
+      const initialItem = {
         id: 'item-0',
         itemNumber: '',
         productName: '',
         quantity: 1,
         unitPrice: 0
-      }]);
+      };
+      setOrderItems([initialItem]);
+      console.log('DynamicOrderForm: Initialized new order with empty item:', initialItem);
     }
   }, [order]);
 
@@ -184,6 +186,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   };
 
   const validateForm = (): boolean => {
+    console.log('DynamicOrderForm: Starting form validation');
     const newErrors: Record<string, string> = {};
     let isValid = true;
 
@@ -193,15 +196,24 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
       (field.editableBy === userRole || field.editableBy === 'both')
     );
 
-    // Additionally exclude fields we intentionally hide from admin in UI
+    // Additionally exclude fields we intentionally hide from admin in UI and order item fields
     const finalFields = userRole === 'admin'
-      ? fieldsToValidate.filter(f => f.name !== 'price' && f.name !== 'confirmFormShehab')
+      ? fieldsToValidate.filter(f => 
+          f.name !== 'price' && 
+          f.name !== 'confirmFormShehab' && 
+          f.name !== 'quantity' &&
+          f.name !== 'itemNumber' &&
+          f.name !== 'productName'
+        )
       : fieldsToValidate;
 
+    console.log('DynamicOrderForm: Fields to validate:', finalFields.map(f => f.name));
+    
     finalFields.forEach(field => {
       const value = formData[field.name];
       const error = validateField(field, value);
       if (error) {
+        console.log(`DynamicOrderForm: Field ${field.name} validation failed:`, error, 'Value:', value);
         newErrors[field.name] = error;
         isValid = false;
       }
@@ -209,14 +221,25 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
 
     // Validate order items
     orderItems.forEach((item, index) => {
-      if (!item.itemNumber.trim()) {
-        newErrors[`item_${index}_itemNumber`] = 'Item number is required';
+      console.log(`Validating item ${index}:`, item);
+      
+      // Skip validation if item number is 'custom' (this means user is still in custom mode but hasn't entered value yet)
+      if (item.itemNumber === 'custom') {
+        newErrors[`item_${index}_itemNumber`] = 'Please enter a custom item number';
+        isValid = false;
+        return; // Skip other validations for this item
+      }
+      
+      if (!item.itemNumber || !item.itemNumber.trim()) {
+        newErrors[`item_${index}_itemNumber`] = 'Please select a product or enter a custom item number';
         isValid = false;
       }
-      if (!item.productName.trim()) {
-        newErrors[`item_${index}_productName`] = 'Product name is required';
+      
+      if (!item.productName || !item.productName.trim()) {
+        newErrors[`item_${index}_productName`] = 'Please enter a product name';
         isValid = false;
       }
+      
       if (!item.quantity || item.quantity <= 0) {
         newErrors[`item_${index}_quantity`] = 'Quantity must be greater than 0';
         isValid = false;
@@ -224,6 +247,12 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
     });
 
     setErrors(newErrors);
+    console.log('DynamicOrderForm: Form validation result:', { isValid, errors: newErrors });
+    
+    if (!isValid) {
+      console.log('DynamicOrderForm: Validation failed with errors:', Object.keys(newErrors).map(key => `${key}: ${newErrors[key]}`));
+    }
+    
     return isValid;
   };
 
@@ -240,11 +269,19 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   };
 
   const handleSubmit = (e: React.FormEvent) => {
+    console.log('DynamicOrderForm: Submit button clicked');
     e.preventDefault();
     
+    console.log('DynamicOrderForm: Current formData:', formData);
+    console.log('DynamicOrderForm: Current orderItems:', orderItems);
+    console.log('DynamicOrderForm: Current errors:', errors);
+    
     if (!validateForm()) {
+      console.log('DynamicOrderForm: Form validation failed');
       return;
     }
+    
+    console.log('DynamicOrderForm: Form validation passed, proceeding with submission');
 
     // Prepare order data based on user role
     let orderData: any;
@@ -319,8 +356,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
       orderData.id = order.id;
     }
 
-    console.log('DynamicOrderForm: Final order data being sent:', orderData);
-
+    console.log('DynamicOrderForm: Calling onSave with orderData:', orderData);
     onSave(orderData);
   };
 
@@ -498,7 +534,12 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                 {/* Invoice Items Section */}
                 <div className="mt-6">
                   <div className="flex justify-between items-center mb-3">
-                    <h5 className="text-sm font-medium text-gray-900">Order Items</h5>
+                    <div>
+                      <h5 className="text-sm font-medium text-gray-900">Order Items</h5>
+                      <p className="text-xs text-gray-500">
+                        {products.length} products available to select from
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={addItem}
@@ -517,19 +558,79 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                           <div className="md:col-span-3">
                             <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Item Number *
-                            </label>
-                            <input
-                              type="text"
-                              value={item.itemNumber}
-                              onChange={(e) => updateItem(item.id, 'itemNumber', e.target.value)}
-                              className={`w-full px-3 py-2 border rounded-md text-sm ${
-                                errors[`item_${index}_itemNumber`] 
-                                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
-                                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                              }`}
-                              placeholder="Enter item number"
-                            />
+                              Select Product *
+                  </label>
+                            {item.itemNumber === 'custom' ? (
+                              <div className="space-y-2">
+                                <select
+                                  value="custom"
+                                  onChange={(e) => {
+                                    if (e.target.value !== 'custom') {
+                                      const selectedProduct = products.find(p => p.itemNumber === e.target.value);
+                                      if (selectedProduct) {
+                                        updateItem(item.id, 'itemNumber', selectedProduct.itemNumber);
+                                        updateItem(item.id, 'productName', selectedProduct.name);
+                                      }
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                  <option value="">Choose existing product...</option>
+                                  {products.map(product => (
+                                    <option key={product.id} value={product.itemNumber}>
+                                      {product.itemNumber} - {product.name}
+                                    </option>
+                                  ))}
+                                  <option value="custom">--- Custom Item ---</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  value={item.itemNumber === 'custom' ? '' : item.itemNumber}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    console.log(`Custom item ${index} onChange:`, value);
+                                    updateItem(item.id, 'itemNumber', value);
+                                  }}
+                                  className={`w-full px-3 py-2 border rounded-md text-sm ${
+                                    errors[`item_${index}_itemNumber`] 
+                                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                                      : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                                  }`}
+                                  placeholder="Enter custom item number"
+                                />
+                              </div>
+                            ) : (
+                  <select
+                                value={item.itemNumber}
+                    onChange={(e) => {
+                                  if (e.target.value === 'custom') {
+                                    updateItem(item.id, 'itemNumber', 'custom');
+                                    updateItem(item.id, 'productName', '');
+                                  } else {
+                                    const selectedProduct = products.find(p => p.itemNumber === e.target.value);
+                                    if (selectedProduct) {
+                                      updateItem(item.id, 'itemNumber', selectedProduct.itemNumber);
+                                      updateItem(item.id, 'productName', selectedProduct.name);
+                                    } else {
+                                      updateItem(item.id, 'itemNumber', e.target.value);
+                                    }
+                                  }
+                                }}
+                                className={`w-full px-3 py-2 border rounded-md text-sm ${
+                                  errors[`item_${index}_itemNumber`] 
+                                    ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
+                                    : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                                }`}
+                              >
+                                <option value="">Choose existing product...</option>
+                    {products.map(product => (
+                                  <option key={product.id} value={product.itemNumber}>
+                        {product.itemNumber} - {product.name}
+                      </option>
+                    ))}
+                                <option value="custom">--- Custom Item ---</option>
+                  </select>
+                            )}
                             {errors[`item_${index}_itemNumber`] && (
                               <p className="text-xs text-red-600 mt-1">{errors[`item_${index}_itemNumber`]}</p>
                             )}
@@ -543,12 +644,15 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                               type="text"
                               value={item.productName}
                               onChange={(e) => updateItem(item.id, 'productName', e.target.value)}
+                              disabled={item.itemNumber && item.itemNumber !== 'custom' && products.some(p => p.itemNumber === item.itemNumber)}
                               className={`w-full px-3 py-2 border rounded-md text-sm ${
                                 errors[`item_${index}_productName`] 
                                   ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
                                   : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                              }`}
-                              placeholder="Enter product name"
+                              } ${item.itemNumber && item.itemNumber !== 'custom' && products.some(p => p.itemNumber === item.itemNumber) 
+                                ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                              placeholder={item.itemNumber && item.itemNumber !== 'custom' && products.some(p => p.itemNumber === item.itemNumber) 
+                                ? "Auto-filled from selected product" : "Enter product name"}
                             />
                             {errors[`item_${index}_productName`] && (
                               <p className="text-xs text-red-600 mt-1">{errors[`item_${index}_productName`]}</p>
@@ -563,7 +667,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                               type="number"
                               min="1"
                               value={item.quantity}
-                              onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                                onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)}
                               className={`w-full px-3 py-2 border rounded-md text-sm ${
                                 errors[`item_${index}_quantity`] 
                                   ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
@@ -594,7 +698,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                         </div>
                       </div>
                     ))}
-                  </div>
+                </div>
 
                   <div className="mt-4 text-sm text-gray-600">
                     Total Items: {orderItems.length} | Total Quantity: {orderItems.reduce((sum, item) => sum + item.quantity, 0)}
@@ -638,6 +742,9 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
               </button>
               <button
                 type="submit"
+                onClick={(e) => {
+                  console.log('DynamicOrderForm: Submit button clicked directly');
+                }}
                 className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 {order ? 'Update Order' : 'Create Order'}

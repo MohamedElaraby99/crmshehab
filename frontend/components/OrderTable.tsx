@@ -353,20 +353,34 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           </thead>
           <tbody>
             {numberedOrders.map((order, index) => {
-              // Debug logging for key issues
-              if (!order.id) {
-                console.warn('Order missing ID:', order, 'index:', index);
+              // Get the ID from different possible fields
+              const orderId = order.id || order._id;
+              
+              // Skip orders without valid IDs
+              if (!orderId || orderId === 'undefined' || orderId === 'null') {
+                console.warn('Skipping order without valid ID:', {
+                  order,
+                  index,
+                  id: order.id,
+                  _id: order._id,
+                  orderNumber: order.orderNumber
+                });
+                return null;
               }
+              
+              // Ensure the order object has the id field
+              const orderWithId = { ...order, id: orderId };
+              
               return (
               <OrderRow 
-                key={order.id || `order-${index}`} 
-                order={order} 
+                key={orderId} 
+                order={orderWithId} 
                 onUpdate={onUpdateOrder || (() => {})}
                 onDelete={onDeleteOrder || (() => {})}
                 onViewHistory={onViewHistory || (() => {})}
                 userIsAdmin={userIsAdmin} 
-                isSelected={selectedRows.has(order.id)}
-                onSelect={() => handleRowSelect(order.id)}
+                isSelected={selectedRows.has(orderId)}
+                onSelect={() => handleRowSelect(orderId)}
                 rowNumber={order.rowNumber}
                 columns={columns}
                 isEven={index % 2 === 0}
