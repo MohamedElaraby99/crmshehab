@@ -404,6 +404,10 @@ router.put('/:id', [
       if (req.body.itemPriceApprovalStatus !== undefined) {
         itemUpdates[`items.${itemIndex}.priceApprovalStatus`] = req.body.itemPriceApprovalStatus;
       }
+      // Also accept priceApprovalStatus for convenience when itemIndex is provided
+      if (req.body.priceApprovalStatus !== undefined) {
+        itemUpdates[`items.${itemIndex}.priceApprovalStatus`] = req.body.priceApprovalStatus;
+      }
       if (req.body.itemPriceApprovalRejectionReason !== undefined) {
         itemUpdates[`items.${itemIndex}.priceApprovalRejectionReason`] = req.body.itemPriceApprovalRejectionReason;
       }
@@ -474,6 +478,13 @@ router.put('/:id', [
       // Update the specific item in the order
       const itemIndex = parseInt(req.body.itemIndex);
       if (order.items && order.items[itemIndex]) {
+        // Directly apply simple fields in case path-based merge is skipped later
+        if (req.body.priceApprovalStatus !== undefined) {
+          order.items[itemIndex].priceApprovalStatus = req.body.priceApprovalStatus;
+        }
+        if (req.body.itemPriceApprovalStatus !== undefined) {
+          order.items[itemIndex].priceApprovalStatus = req.body.itemPriceApprovalStatus;
+        }
         // Update the specific item with the provided fields
         console.log(`Backend: Updating item at index ${itemIndex}`);
         console.log(`Backend: Item before update:`, JSON.stringify(order.items[itemIndex], null, 2));
