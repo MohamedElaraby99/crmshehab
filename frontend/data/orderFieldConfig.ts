@@ -140,32 +140,6 @@ export const ORDER_FIELD_CONFIGS: OrderFieldConfig[] = [
       { value: 'confirmed', label: 'Confirmed' }
     ]
   },
-  {
-    name: 'priceApprovalStatus',
-    label: 'Price Approval Status',
-    type: 'select',
-    required: false,
-    editableBy: 'admin',
-    visibleTo: 'both',
-    options: [
-      { value: 'pending', label: 'Pending' },
-      { value: 'approved', label: 'Approved' },
-      { value: 'rejected', label: 'Rejected' }
-    ]
-  },
-  {
-    name: 'priceApprovalRejectionReason',
-    label: 'Rejection Reason',
-    type: 'textarea',
-    required: false,
-    editableBy: 'admin',
-    visibleTo: 'both',
-    placeholder: 'Enter reason for rejection...',
-    conditional: {
-      field: 'priceApprovalStatus',
-      value: 'rejected'
-    }
-  }
 ];
 
 // Helper functions

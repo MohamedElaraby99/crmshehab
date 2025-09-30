@@ -254,10 +254,9 @@ router.post('/', [
 router.put('/:id', [
   authenticateUserOrVendor,
   body('status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid status'),
-  body('priceApprovalStatus').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Invalid price approval status'),
-  body('priceApprovalRejectionReason').optional().trim().isLength({ max: 500 }).withMessage('Rejection reason too long'),
   body('items').optional().isArray().withMessage('Items must be an array'),
   body('items.*.priceApprovalStatus').optional().isIn(['pending', 'approved', 'rejected']).withMessage('Invalid item price approval status'),
+  body('items.*.priceApprovalRejectionReason').optional().trim().isLength({ max: 500 }).withMessage('Item rejection reason too long'),
   body('items.*.status').optional().isIn(['pending', 'confirmed', 'shipped', 'delivered', 'cancelled']).withMessage('Invalid item status'),
   body('items.*.notes').optional().trim().isLength({ max: 500 }).withMessage('Item notes too long'),
   body('items.*.estimatedDateReady').optional().trim().isLength({ max: 100 }).withMessage('Item estimated date too long'),
@@ -292,21 +291,59 @@ router.put('/:id', [
 
     if (req.body.status) updateData.status = req.body.status;
 
-    // Only allow priceApprovalStatus to be changed by admins, not vendors
-    if (req.body.priceApprovalStatus !== undefined) {
-      if (req.userType === 'admin') {
-        updateData.priceApprovalStatus = req.body.priceApprovalStatus;
-      } else {
-        const currentOrder = await Order.findById(req.params.id);
-        if (currentOrder) {
-          updateData.priceApprovalStatus = currentOrder.priceApprovalStatus;
-        }
+
+    // Handle individual item updates (for item-level fields)
+    if (req.body.itemIndex !== undefined && req.body.itemIndex >= 0) {
+      const itemIndex = req.body.itemIndex;
+      
+      console.log('Backend: Received item update request:', {
+        orderId: req.params.id,
+        itemIndex: itemIndex,
+        orderItemsCount: order.items.length,
+        requestBody: req.body
+      });
+      
+      // Validate that the item index is within bounds
+      if (itemIndex >= order.items.length) {
+        console.log('Backend: Item index out of bounds:', itemIndex, '>=', order.items.length);
+        return res.status(400).json({ 
+          success: false, 
+          message: `Item index ${itemIndex} is out of bounds. Order has ${order.items.length} items.` 
+        });
+      }
+      
+      const itemUpdates = {};
+      
+      // Handle item-specific fields
+      if (req.body.itemPriceApprovalStatus !== undefined) {
+        itemUpdates[`items.${itemIndex}.priceApprovalStatus`] = req.body.itemPriceApprovalStatus;
+      }
+      if (req.body.itemPriceApprovalRejectionReason !== undefined) {
+        itemUpdates[`items.${itemIndex}.priceApprovalRejectionReason`] = req.body.itemPriceApprovalRejectionReason;
+      }
+      if (req.body.itemStatus !== undefined) {
+        itemUpdates[`items.${itemIndex}.status`] = req.body.itemStatus;
+      }
+      if (req.body.itemNotes !== undefined) {
+        itemUpdates[`items.${itemIndex}.notes`] = req.body.itemNotes;
+      }
+      if (req.body.itemEstimatedDateReady !== undefined) {
+        itemUpdates[`items.${itemIndex}.estimatedDateReady`] = req.body.itemEstimatedDateReady;
+      }
+      
+      // Apply item-specific updates
+      if (Object.keys(itemUpdates).length > 0) {
+        console.log('Backend: Applying item-specific updates:', JSON.stringify(itemUpdates, null, 2));
+        Object.assign(updateData, itemUpdates);
+        console.log('Backend: Final updateData after item updates:', JSON.stringify(updateData, null, 2));
+        
       }
     }
 
-    // Handle items array updates (for item-level fields)
-    if (req.body.items && Array.isArray(req.body.items)) {
-      console.log('OrderRow: Received items for update:', JSON.stringify(req.body.items, null, 2));
+    // Handle full items array updates (for bulk operations) - only if no individual item updates
+    if (req.body.items && Array.isArray(req.body.items) && req.body.itemIndex === undefined) {
+      console.log('Backend: Received full items array update (no itemIndex)');
+      console.log('Backend: Items count in request:', req.body.items.length);
       
       // Process items to ensure productId is just the ID string, not the populated object
       const processedItems = req.body.items.map(item => {
@@ -320,8 +357,11 @@ router.put('/:id', [
         return processedItem;
       });
       
-      console.log('OrderRow: Processed items for update:', JSON.stringify(processedItems, null, 2));
+      console.log('Backend: Processed items for update:', JSON.stringify(processedItems, null, 2));
       updateData.items = processedItems;
+    } else if (req.body.items && Array.isArray(req.body.items) && req.body.itemIndex !== undefined) {
+      console.log('Backend: WARNING - Received both items array AND itemIndex. Ignoring items array to prevent data loss.');
+      console.log('Backend: This might indicate a frontend issue where both individual and bulk updates are being sent.');
     }
 
     // Handle other order-level fields
@@ -336,9 +376,37 @@ router.put('/:id', [
     if (req.body.notes !== undefined) updateData.notes = req.body.notes;
 
     // Apply updates
-    console.log('OrderRow: Applying update data:', JSON.stringify(updateData, null, 2));
-    const updatedOrder = await Order.findByIdAndUpdate(req.params.id, updateData, { runValidators: true, new: true });
-    console.log('OrderRow: Updated order after findByIdAndUpdate:', JSON.stringify(updatedOrder?.items, null, 2));
+    console.log('Backend: Applying update data:', JSON.stringify(updateData, null, 2));
+    
+    // For individual item updates, use a different approach to preserve all items
+    if (req.body.itemIndex !== undefined && req.body.itemIndex >= 0) {
+      console.log('Backend: Using individual item update approach');
+      
+      // Update the order object directly
+      for (const [key, value] of Object.entries(updateData)) {
+        const path = key.split('.');
+        if (path[0] === 'items' && path[1] === req.body.itemIndex.toString()) {
+          const field = path[2];
+          if (order.items[req.body.itemIndex]) {
+            order.items[req.body.itemIndex][field] = value;
+            console.log(`Backend: Updated order.items[${req.body.itemIndex}].${field} to:`, value);
+          }
+        }
+      }
+      
+      // Save the order with all items preserved
+      await order.save();
+      console.log('Backend: Order saved with all items preserved');
+      
+      // Fetch the complete updated order
+      const updatedOrder = await Order.findById(req.params.id);
+      console.log('Backend: Updated order after save:', JSON.stringify(updatedOrder?.items, null, 2));
+      console.log('Backend: Updated order items count:', updatedOrder?.items?.length);
+    } else {
+      // For non-item updates, use the regular approach
+      const updatedOrder = await Order.findByIdAndUpdate(req.params.id, updateData, { runValidators: true, new: true });
+      console.log('Backend: Updated order after findByIdAndUpdate:', JSON.stringify(updatedOrder?.items, null, 2));
+    }
 
     // Adjust stock and create/remove purchase records if needed
     const newStatus = updateData.status || previousStatus;

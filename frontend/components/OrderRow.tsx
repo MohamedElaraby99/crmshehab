@@ -86,6 +86,7 @@ const EditableCell: React.FC<{
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.preventDefault(); // Prevent form submission
     if (e.key === 'Enter') {
       handleBlur();
     } else if (e.key === 'Escape') {
@@ -95,12 +96,15 @@ const EditableCell: React.FC<{
   };
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    e.preventDefault(); // Prevent form submission
+    e.stopPropagation(); // Stop event bubbling
     console.log('OrderRow: handleSelectChange called with value:', e.target.value);
     console.log('OrderRow: Field being changed: priceApprovalStatus');
     setEditValue(e.target.value);
     // For select elements, immediately save the change
     onChange(e.target.value);
     setIsEditing(false);
+    return false; // Additional prevention
     
     // Test: Send only the priceApprovalStatus field
     console.log('OrderRow: Testing direct API call with only priceApprovalStatus');
@@ -186,17 +190,17 @@ const EditableCell: React.FC<{
           >
             {fieldName === 'itemStatus' ? (
               <>
-                <option value="pending">PENDING</option>
-                <option value="confirmed">CONFIRMED</option>
-                <option value="shipped">SHIPPED</option>
-                <option value="delivered">DELIVERED</option>
-                <option value="cancelled">CANCELLED</option>
+                <option key="pending" value="pending">PENDING</option>
+                <option key="confirmed" value="confirmed">CONFIRMED</option>
+                <option key="shipped" value="shipped">SHIPPED</option>
+                <option key="delivered" value="delivered">DELIVERED</option>
+                <option key="cancelled" value="cancelled">CANCELLED</option>
               </>
             ) : (
               <>
-                <option value="pending">PENDING</option>
-                <option value="approved">APPROVED</option>
-                <option value="rejected">REJECTED</option>
+                <option key="pending" value="pending">PENDING</option>
+                <option key="approved" value="approved">APPROVED</option>
+                <option key="rejected" value="rejected">REJECTED</option>
               </>
             )}
           </select>
@@ -259,7 +263,18 @@ const OrderRow: React.FC<OrderRowProps> = ({
     }
   }, []);
 
-  const canEditField = (fieldName: keyof Order | 'priceApprovalStatus' | 'priceApprovalRejectionReason'): boolean => {
+  // Sync local state with incoming order prop
+  useEffect(() => {
+    console.log('OrderRow: Syncing with incoming order prop:', {
+      orderId: order.id,
+      itemIndex: order.itemIndex,
+      currentItemPriceApprovalStatus: order.currentItem?.priceApprovalStatus,
+      editableOrderPriceApprovalStatus: editableOrder.items?.[order.itemIndex || 0]?.priceApprovalStatus
+    });
+    setEditableOrder(order);
+  }, [order]);
+
+  const canEditField = (fieldName: keyof Order | 'itemPriceApprovalStatus' | 'itemPriceApprovalRejectionReason'): boolean => {
     if (userIsAdmin) {
       return true;
     }
@@ -271,16 +286,16 @@ const OrderRow: React.FC<OrderRowProps> = ({
     }
     
     // Fallback to static configuration
-    return SUPPLIER_EDITABLE_FIELDS.includes(fieldName);
+    return SUPPLIER_EDITABLE_FIELDS.includes(fieldName as any);
   };
 
   const handleChange = (field: string, value: string) => {
     console.log('OrderRow: handleChange called with field:', field, 'value:', value);
     console.log('OrderRow: userIsAdmin:', userIsAdmin);
-    console.log('OrderRow: canEditField result:', canEditField(field as keyof Order));
-    console.log('OrderRow: Current priceApprovalStatus before change:', editableOrder.priceApprovalStatus);
+    console.log('OrderRow: canEditField result:', canEditField(field as any));
+    console.log('OrderRow: Current item price approval status before change:', currentItem?.priceApprovalStatus);
     // Prevent non-admins from changing protected fields
-    if (!canEditField(field as keyof Order)) {
+    if (!canEditField(field as any)) {
       console.log('OrderRow: Field not editable for this user:', field);
       return;
     }
@@ -327,6 +342,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
           updatedOrder.items[itemIndex].notes = String(parsedValue);
         } else if (field === 'itemEstimatedDateReady') {
           updatedOrder.items[itemIndex].estimatedDateReady = String(parsedValue);
+        } else if (field === 'itemPriceApprovalRejectionReason') {
+          updatedOrder.items[itemIndex].priceApprovalRejectionReason = String(parsedValue);
         }
         // Recalculate total amount
         updatedOrder.totalAmount = updatedOrder.items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
@@ -339,28 +356,27 @@ const OrderRow: React.FC<OrderRowProps> = ({
       console.log('OrderRow: Updated field', field, 'to', parsedValue);
     }
     
-    setEditableOrder(updatedOrder);
-    console.log('OrderRow: Sending updated order to parent:', updatedOrder);
-    console.log('OrderRow: priceApprovalStatus in updated order:', updatedOrder.priceApprovalStatus);
-    
-    // For priceApprovalStatus, send only the specific field that changed
-    if (field === 'priceApprovalStatus') {
-      console.log('OrderRow: Sending only priceApprovalStatus field:', { [field]: parsedValue });
-      // Create a partial order with the ID and the changed field
+    // For item-level fields, send only the specific field that changed with item index
+    if (field.startsWith('item')) {
+      console.log('OrderRow: Sending only item field:', { [field]: parsedValue, itemIndex: itemIndex });
+      // Create a partial order with the ID, item index, and the changed field
       const partialUpdate = { 
         id: editableOrder.id,
+        itemIndex: itemIndex,
         [field]: parsedValue 
       };
-      onUpdate(partialUpdate as any);
-    } else if (field === 'priceApprovalRejectionReason') {
-      console.log('OrderRow: Sending only priceApprovalRejectionReason field:', { [field]: parsedValue });
-      // Create a partial order with the ID and the changed field
-      const partialUpdate = { 
-        id: editableOrder.id,
-        [field]: parsedValue 
-      };
+      console.log('OrderRow: Partial update object:', partialUpdate);
+      
+      // Update the local state for item-level fields FIRST
+      setEditableOrder(updatedOrder);
+      
+      // Then send the update to parent
       onUpdate(partialUpdate as any);
     } else {
+      // For non-item fields, update the full order
+      setEditableOrder(updatedOrder);
+      console.log('OrderRow: Sending updated order to parent:', updatedOrder);
+      console.log('OrderRow: item price approval status in updated order:', currentItem?.priceApprovalStatus);
       // For vendor updates, send only the specific field that changed
       if (!userIsAdmin) {
         // Create a minimal update object with only the changed field and order ID
@@ -379,6 +395,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
         onUpdate(vendorUpdate as any);
       } else {
         console.log('OrderRow: Admin update - sending full order object');
+        console.log('OrderRow: Admin full order object items count:', updatedOrder.items?.length);
         onUpdate(updatedOrder);
       }
     }
@@ -389,7 +406,10 @@ const OrderRow: React.FC<OrderRowProps> = ({
   const isFirstItem = order.isFirstItem || false;
   const isLastItem = order.isLastItem || false;
   const totalItemsInOrder = order.totalItemsInOrder || 1;
-  const itemIndex = order.itemIndex || 0;
+  const itemIndex = order.itemIndex !== undefined ? order.itemIndex : 0;
+  
+  // Debug: Log the item index to verify it's correct
+  console.log('OrderRow: itemIndex from order:', order.itemIndex, 'resolved itemIndex:', itemIndex);
 
   const getCellValue = (columnKey: string) => {
     switch (columnKey) {
@@ -441,10 +461,8 @@ const OrderRow: React.FC<OrderRowProps> = ({
         return editableOrder.notes || '';
       case 'status':
         return editableOrder.status || 'pending';
-      case 'priceApprovalStatus':
-        return editableOrder.priceApprovalStatus || 'pending';
-      case 'priceApprovalRejectionReason':
-        return editableOrder.priceApprovalRejectionReason || '';
+      case 'itemPriceApprovalRejectionReason':
+        return currentItem?.priceApprovalRejectionReason || '';
       case 'itemPriceApprovalStatus':
         return currentItem?.priceApprovalStatus || 'pending';
       case 'itemStatus':
@@ -464,11 +482,10 @@ const OrderRow: React.FC<OrderRowProps> = ({
       case 'price':
       case 'transferAmount':
         return 'number';
-      case 'priceApprovalStatus':
       case 'itemPriceApprovalStatus':
       case 'itemStatus':
         return 'select';
-      case 'priceApprovalRejectionReason':
+      case 'itemPriceApprovalRejectionReason':
         return 'textarea';
       case 'itemImage':
         return 'image';
@@ -693,7 +710,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
 
         const value = getCellValue(column.key);
         const cellType = getCellType(column.key);
-        const isEditable = canEditField(column.key as keyof Order);
+        const isEditable = canEditField(column.key as any);
 
         // Special handling for item number column to show item position info
         if (column.key === 'itemNumber' && hasMultipleItems) {
@@ -741,10 +758,10 @@ const OrderRow: React.FC<OrderRowProps> = ({
           );
         }
 
-        // Conditional rendering for rejection reason - only show when price approval is rejected
-        if (column.key === 'priceApprovalRejectionReason') {
-          // Only show rejection reason field when price approval status is 'rejected'
-          if (editableOrder.priceApprovalStatus !== 'rejected') {
+        // Conditional rendering for item-level rejection reason - only show when item price approval is rejected
+        if (column.key === 'itemPriceApprovalRejectionReason') {
+          // Only show rejection reason field when item price approval status is 'rejected'
+          if (currentItem?.priceApprovalStatus !== 'rejected') {
             return (
               <td 
                 key={column.key}

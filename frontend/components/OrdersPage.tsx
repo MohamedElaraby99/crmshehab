@@ -41,23 +41,25 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
       console.log('Fetched orders:', allOrders.length);
       const ordersWithFixedIds = allOrders.map((order, index) => {
         // Ensure order has proper id field (map _id to id if needed)
-        if (!order.id && order._id) {
+        const orderWithId = order as any; // Cast to any to access _id property
+        if (!order.id && orderWithId._id) {
           console.log(`Fixing ID for order ${index}:`, {
             orderNumber: order.orderNumber,
-            _id: order._id,
+            _id: orderWithId._id,
             id: order.id
           });
-          return { ...order, id: order._id };
+          return { ...order, id: orderWithId._id };
         }
         return order;
       });
       
       ordersWithFixedIds.forEach((order, index) => {
         if (!order.id || order.id === 'undefined') {
+          const orderWithId = order as any; // Cast to any to access _id property
           console.warn(`Order ${index} still has invalid ID after fix:`, {
             order,
             id: order.id,
-            _id: order._id,
+            _id: orderWithId._id,
             orderNumber: order.orderNumber
           });
         }
@@ -143,6 +145,35 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
             )
           );
         }
+        return;
+      }
+      
+      // For item-level updates (like itemPriceApprovalStatus)
+      if ((orderData as any).itemIndex !== undefined) {
+        console.log('OrdersPage: Handling item-level update:', orderData);
+        const { id, itemIndex, ...updateFields } = orderData as any;
+        
+        // Update the specific item in the order
+        setOrders(prevOrders => 
+          prevOrders.map(order => {
+            if (order.id === id && order.items && order.items[itemIndex]) {
+              const updatedItems = [...order.items];
+              updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updateFields };
+              console.log('OrdersPage: Updated item in order:', {
+                orderId: id,
+                itemIndex,
+                updatedItem: updatedItems[itemIndex],
+                updateFields
+              });
+              return { ...order, items: updatedItems };
+            }
+            return order;
+          })
+        );
+        
+        // Send the update to the API
+        const updated = await updateOrder(id, orderData as any);
+        console.log('OrdersPage: API update result:', updated);
         return;
       }
       

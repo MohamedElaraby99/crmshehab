@@ -30,8 +30,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'price', label: 'PRICE', width: 100, type: 'number' },
     { key: 'total', label: 'TOTAL', width: 110, type: 'number' },
     { key: 'vendor', label: 'VENDOR', width: 150, type: 'text' },
-    { key: 'priceApprovalStatus', label: 'ORDER PRICE APPROVAL', width: 150, type: 'select' },
-    { key: 'priceApprovalRejectionReason', label: 'REJECTION REASON', width: 200, type: 'text' },
+    { key: 'itemPriceApprovalStatus', label: 'ITEM PRICE APPROVAL', width: 150, type: 'select' },
+    { key: 'itemPriceApprovalRejectionReason', label: 'ITEM REJECTION REASON', width: 200, type: 'text' },
     { key: 'confirmFormShehab', label: 'CONFIRM FORM SHEHAB ', width: 150, type: 'date' },
     { key: 'estimatedDateReady', label: 'EST. DATE READY', width: 140, type: 'date' },
     { key: 'invoiceNumber', label: 'INVOICE #', width: 120, type: 'text' },
@@ -187,6 +187,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     }
     
     const items = order.items || [];
+    console.log(`OrderTable: Processing order ${orderId} with ${items.length} items:`, {
+      orderId,
+      itemsCount: items.length,
+      items: items.map(item => ({ itemNumber: item.itemNumber, quantity: item.quantity }))
+    });
+    
     if (items.length === 0) {
       // If no items, create a single row with empty item
       return [{
@@ -197,20 +203,39 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         isLastItem: true,
         totalItemsInOrder: 0,
         currentItem: null,
-        orderRowNumber: orderIndex + 1
+        orderRowNumber: orderIndex + 1,
+        // Add a stable key to prevent React from losing track of the item
+        stableKey: `${orderId}-0`
       }];
     }
     
-    return items.map((item, itemIndex) => ({
-      ...order,
-      id: orderId,
-      itemIndex,
-      isFirstItem: itemIndex === 0,
-      isLastItem: itemIndex === items.length - 1,
-      totalItemsInOrder: items.length,
-      currentItem: item,
-      orderRowNumber: orderIndex + 1
-    }));
+    const flattenedItems = items.map((item, itemIndex) => {
+      const flattenedItem = {
+        ...order,
+        id: orderId,
+        itemIndex,
+        isFirstItem: itemIndex === 0,
+        isLastItem: itemIndex === items.length - 1,
+        totalItemsInOrder: items.length,
+        currentItem: item,
+        orderRowNumber: orderIndex + 1,
+        // Add a stable key to prevent React from losing track of the item
+        stableKey: `${orderId}-${itemIndex}`
+      };
+      
+      // Debug: Log the itemIndex for each flattened item
+      console.log(`OrderTable: Flattened item ${itemIndex} for order ${orderId}:`, {
+        itemIndex: flattenedItem.itemIndex,
+        itemNumber: item.itemNumber,
+        orderNumber: order.orderNumber,
+        stableKey: flattenedItem.stableKey
+      });
+      
+      return flattenedItem;
+    });
+    
+    console.log(`OrderTable: Returning ${flattenedItems.length} flattened items for order ${orderId}`);
+    return flattenedItems;
   });
   
   const numberedOrders = addRowNumbers(flattenedOrderItems);
@@ -396,9 +421,9 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
               onChange={(e) => setSearchType(e.target.value as 'invoiceNumber' | 'itemCount' | 'all')}
               className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
             >
-              <option value="all">All Fields</option>
-              <option value="invoiceNumber">Invoice Number</option>
-              <option value="itemCount">Number of Items</option>
+              <option key="all" value="all">All Fields</option>
+              <option key="invoiceNumber" value="invoiceNumber">Invoice Number</option>
+              <option key="itemCount" value="itemCount">Number of Items</option>
             </select>
             <input
               type="text"
@@ -507,11 +532,19 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                 return null;
               }
               
-              // Create unique key by combining order ID and item index
-              const uniqueKey = `${orderId}-${(order as any).itemIndex || 0}-${index}`;
+              // Use the stable key if available, otherwise fall back to the old method
+              const uniqueKey = (order as any).stableKey || `${orderId}-${(order as any).itemIndex || 0}-${index}`;
               
               // Ensure the order object has the id field
               const orderWithId = { ...order, id: orderId };
+              
+              // Debug: Log what's being passed to OrderRow
+              console.log(`OrderTable: Passing to OrderRow - Order ${orderId}, Item ${(order as any).itemIndex}:`, {
+                orderId: orderWithId.id,
+                itemIndex: (order as any).itemIndex,
+                itemNumber: (order as any).currentItem?.itemNumber,
+                orderNumber: orderWithId.orderNumber
+              });
               
               return (
               <OrderRow 

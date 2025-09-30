@@ -46,12 +46,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
     fetchOrders();
   }, []);
 
-  const handleUpdateOrder = async (updatedOrder: Order) => {
+  const handleUpdateOrder = async (updatedOrder: Order | Partial<Order>) => {
     try {
-      const success = await apiUpdateOrder(updatedOrder.id, updatedOrder);
+      console.log('AdminDashboard: handleUpdateOrder received:', updatedOrder);
+      
+      const orderId = (updatedOrder as any).id;
+      if (!orderId) {
+        console.error('AdminDashboard: No order ID provided for update');
+        return;
+      }
+      
+      // For item-level updates (like itemPriceApprovalStatus)
+      if ((updatedOrder as any).itemIndex !== undefined) {
+        console.log('AdminDashboard: Handling item-level update:', updatedOrder);
+        const { id, itemIndex, ...updateFields } = updatedOrder as any;
+        
+        // Update the specific item in the order
+        setOrders(prevOrders => 
+          prevOrders.map(order => {
+            if (order.id === id && order.items && order.items[itemIndex]) {
+              const updatedItems = [...order.items];
+              updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updateFields };
+              console.log('AdminDashboard: Updated item in order:', {
+                orderId: id,
+                itemIndex,
+                updatedItem: updatedItems[itemIndex],
+                updateFields
+              });
+              return { ...order, items: updatedItems };
+            }
+            return order;
+          })
+        );
+        
+        // Send the update to the API
+        const success = await apiUpdateOrder(id, updatedOrder as any);
+        console.log('AdminDashboard: API update result:', success);
+        return;
+      }
+      
+      // For complete order updates
+      const success = await apiUpdateOrder(updatedOrder.id, updatedOrder as Order);
       if (success) {
         setOrders(prev => prev.map(order => 
-          order.id === updatedOrder.id ? updatedOrder : order
+          order.id === updatedOrder.id ? (updatedOrder as Order) : order
         ));
         setShowEditModal(false);
         setEditingOrder(null);

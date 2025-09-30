@@ -45,22 +45,77 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
     }
   };
 
-  const handleUpdateOrder = async (updatedOrder: Order) => {
+  const handleUpdateOrder = async (updatedOrder: Order | Partial<Order>) => {
     try {
+      console.log('VendorDashboard: handleUpdateOrder received:', updatedOrder);
+      
+      const orderId = (updatedOrder as any).id;
+      if (!orderId) {
+        console.error('VendorDashboard: No order ID provided for update');
+        return;
+      }
+      
+      // For item-level updates (like itemPriceApprovalStatus)
+      if ((updatedOrder as any).itemIndex !== undefined) {
+        console.log('VendorDashboard: Handling item-level update:', updatedOrder);
+        const { id, itemIndex, ...updateFields } = updatedOrder as any;
+        
+        // Update the specific item in the order
+        setOrders(prevOrders => 
+          prevOrders.map(order => {
+            if (order.id === id && order.items && order.items[itemIndex]) {
+              const updatedItems = [...order.items];
+              updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updateFields };
+              console.log('VendorDashboard: Updated item in order:', {
+                orderId: id,
+                itemIndex,
+                updatedItem: updatedItems[itemIndex],
+                updateFields
+              });
+              return { ...order, items: updatedItems };
+            }
+            return order;
+          })
+        );
+        
+        setAllOrders(prevOrders => 
+          prevOrders.map(order => {
+            if (order.id === id && order.items && order.items[itemIndex]) {
+              const updatedItems = [...order.items];
+              updatedItems[itemIndex] = { ...updatedItems[itemIndex], ...updateFields };
+              console.log('VendorDashboard: Updated item in allOrders:', {
+                orderId: id,
+                itemIndex,
+                updatedItem: updatedItems[itemIndex],
+                updateFields
+              });
+              return { ...order, items: updatedItems };
+            }
+            return order;
+          })
+        );
+        
+        // Send the update to the API
+        const updated = await apiUpdateOrder(id, updatedOrder as any);
+        console.log('VendorDashboard: API update result:', updated);
+        return;
+      }
+      
+      // For complete order updates
       // Optimistic update - update the local state immediately
       setOrders(prevOrders => 
         prevOrders.map(order => 
-          order.id === updatedOrder.id ? updatedOrder : order
+          order.id === orderId ? (updatedOrder as Order) : order
         )
       );
       setAllOrders(prevOrders => 
         prevOrders.map(order => 
-          order.id === updatedOrder.id ? updatedOrder : order
+          order.id === orderId ? (updatedOrder as Order) : order
         )
       );
       
       // Then make the API call
-      const updated = await apiUpdateOrder(updatedOrder.id, updatedOrder);
+      const updated = await apiUpdateOrder(updatedOrder.id, updatedOrder as Order);
       
       // Only refresh if there was an error (to sync with server state)
       // This prevents unnecessary full refreshes

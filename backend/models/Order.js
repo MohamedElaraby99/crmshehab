@@ -47,6 +47,12 @@ const orderSchema = new mongoose.Schema({
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending'
     },
+    // Item-level price approval rejection reason
+    priceApprovalRejectionReason: {
+      type: String,
+      trim: true,
+      maxlength: 500
+    },
     // Item-level status
     status: {
       type: String,
@@ -82,16 +88,6 @@ const orderSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'],
     default: 'pending'
-  },
-  priceApprovalStatus: {
-    type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending'
-  },
-  priceApprovalRejectionReason: {
-    type: String,
-    trim: true,
-    maxlength: 500
   },
   confirmFormShehab: {
     type: String,

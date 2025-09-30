@@ -10,6 +10,7 @@ export interface OrderItem {
   totalPrice: number;
   // Item-level fields
   priceApprovalStatus?: 'pending' | 'approved' | 'rejected';
+  priceApprovalRejectionReason?: string;
   status?: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
   notes?: string;
   estimatedDateReady?: string;
@@ -23,8 +24,6 @@ export interface Order {
   totalAmount: number;
   price?: number;
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
-  priceApprovalStatus?: 'pending' | 'approved' | 'rejected';
-  priceApprovalRejectionReason?: string;
   confirmFormShehab?: string;
   itemImageUrl?: string;
   imagePath?: string;
