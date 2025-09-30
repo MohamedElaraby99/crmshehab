@@ -733,6 +733,22 @@ const OrderRow: React.FC<OrderRowProps> = ({
                   </button>
                 )}
                 
+                {/* Admin-only: Quick Item Status selector */}
+                {userIsAdmin && (
+                  <select
+                    value={currentItem?.status || 'pending'}
+                    onChange={(e) => handleChange('status', e.target.value)}
+                    className="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white"
+                    title="Update item status"
+                  >
+                    <option value="pending">PENDING</option>
+                    <option value="confirmed">CONFIRMED</option>
+                    <option value="shipped">SHIPPED</option>
+                    <option value="delivered">DELIVERED</option>
+                    <option value="cancelled">CANCELLED</option>
+                  </select>
+                )}
+
                 {/* Admin-only: Delete Item button */}
                 {userIsAdmin && editableOrder.items && (
                   <button

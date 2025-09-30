@@ -418,6 +418,10 @@ router.put('/:id', [
       if (req.body.itemStatus !== undefined) {
         itemUpdates[`items.${itemIndex}.status`] = req.body.itemStatus;
       }
+      // Also accept 'status' as item status when itemIndex is provided
+      if (req.body.status !== undefined) {
+        itemUpdates[`items.${itemIndex}.status`] = req.body.status;
+      }
       if (req.body.itemNotes !== undefined) {
         itemUpdates[`items.${itemIndex}.notes`] = req.body.itemNotes;
       }
@@ -526,6 +530,12 @@ router.put('/:id', [
         }
         if (req.body.itemPriceApprovalRejectionReason !== undefined) {
           order.items[itemIndex].priceApprovalRejectionReason = req.body.itemPriceApprovalRejectionReason;
+        }
+        if (req.body.itemStatus !== undefined) {
+          order.items[itemIndex].status = req.body.itemStatus;
+        }
+        if (req.body.status !== undefined) {
+          order.items[itemIndex].status = req.body.status;
         }
         // Update the specific item with the provided fields
         console.log(`Backend: Updating item at index ${itemIndex}`);
