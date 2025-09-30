@@ -21,6 +21,8 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showOrderDetailsModal, setShowOrderDetailsModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -205,6 +207,11 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
     setShowModal(true);
   };
 
+  const handleViewOrderDetails = (order: Order) => {
+    setSelectedOrder(order);
+    setShowOrderDetailsModal(true);
+  };
+
   const handleFieldConfigChange = (newConfigs: OrderFieldConfig[]) => {
     setFieldConfigs(newConfigs);
     // Force re-render of the modal if it's open
@@ -312,7 +319,11 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {orders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50">
+                    <tr 
+                      key={order.id} 
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => handleViewOrderDetails(order)}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{order.orderNumber || order.id}</div>
                       </td>
@@ -337,21 +348,57 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {order.items && order.items[0] ? `${order.items[0].itemNumber} - ${order.items[0].productId?.name || 'Product'}` : 'N/A'}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Qty: {order.items && order.items[0] ? order.items[0].quantity : 'N/A'}
+                        {order.items && order.items.length > 0 ? (
+                          <>
+                            <div className="text-sm text-gray-900">
+                              {order.items.length === 1 ? (
+                                // Single item - show full details
+                                `${order.items[0].itemNumber} - ${order.items[0].productId?.name || 'Product'}`
+                              ) : (
+                                // Multiple items - show summary
+                                `${order.items.length} items (click to view all)`
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {order.items.length === 1 ? (
+                                `Qty: ${order.items[0].quantity}`
+                              ) : (
+                                `Total Qty: ${order.items.reduce((sum, item) => sum + item.quantity, 0)}`
+                              )}
+                            </div>
+                            {order.items.length > 1 && (
+                              <div className="text-xs text-blue-600 mt-1">
+                                Click row to see all {order.items.length} items
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-sm text-gray-500">No items</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {order.items && order.items.length > 0 ? (
+                            order.items.length === 1 ? (
+                              // Single item - show unit price
+                              `$${order.items[0].unitPrice ? order.items[0].unitPrice.toFixed(2) : '0.00'}`
+                            ) : (
+                              // Multiple items - show average
+                              `$${(order.items.reduce((sum, item) => sum + (item.unitPrice || 0), 0) / order.items.length).toFixed(2)} avg`
+                            )
+                          ) : (
+                            '$0.00'
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          ${order.items && order.items[0] && order.items[0].unitPrice ? order.items[0].unitPrice.toFixed(2) : '0.00'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          ${order.items && order.items[0] ? ((order.items[0].unitPrice || 0) * (order.items[0].quantity || 0)).toFixed(2) : '0.00'}
+                          {order.items && order.items.length > 0 ? (
+                            // Calculate total for all items
+                            `$${order.items.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0).toFixed(2)}`
+                          ) : (
+                            '$0.00'
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -383,13 +430,19 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => handleEditOrder(order)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditOrder(order);
+                            }}
                             className="text-blue-600 hover:text-blue-900"
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDeleteOrder(order.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteOrder(order.id);
+                            }}
                             className="text-red-600 hover:text-red-900"
                           >
                             Delete
@@ -434,6 +487,19 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
           onClose={() => {
             setShowProductModal(false);
             setEditingProduct(null);
+          }}
+        />
+      )}
+
+      {/* Order Details Modal */}
+      {showOrderDetailsModal && selectedOrder && (
+        <OrderDetailsModal
+          order={selectedOrder}
+          vendors={vendors}
+          products={products}
+          onClose={() => {
+            setShowOrderDetailsModal(false);
+            setSelectedOrder(null);
           }}
         />
       )}
@@ -604,6 +670,162 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
               <button type="submit" className="px-4 py-2 rounded bg-green-600 text-white">Save Product</button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Order Details Modal Component
+interface OrderDetailsModalProps {
+  order: Order;
+  vendors: Vendor[];
+  products: Product[];
+  onClose: () => void;
+}
+
+const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, products, onClose }) => {
+  const getVendorName = () => {
+    if (typeof order.vendorId === 'string') {
+      const vendor = vendors.find(v => v.id === order.vendorId);
+      return vendor?.name || 'Unknown Vendor';
+    } else if (order.vendorId && typeof order.vendorId === 'object') {
+      return order.vendorId.name || 'Unknown Vendor';
+    }
+    return 'Unknown Vendor';
+  };
+
+  const getProductName = (productId: any) => {
+    if (typeof productId === 'object' && productId?.name) {
+      return productId.name;
+    } else if (typeof productId === 'string') {
+      const product = products.find(p => p.id === productId || p.itemNumber === productId);
+      return product?.name || 'Unknown Product';
+    }
+    return 'Unknown Product';
+  };
+
+  const formatDate = (dateValue: string | Date | null): string => {
+    if (!dateValue) return 'N/A';
+    const date = new Date(dateValue);
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-bold text-gray-900">Order Details</h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Order Information */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h4 className="text-md font-semibold text-gray-900 mb-3">Order Information</h4>
+            <div className="space-y-2 text-sm">
+              <div><span className="font-medium">Order Number:</span> {order.orderNumber}</div>
+              <div><span className="font-medium">Status:</span> 
+                <span className={`ml-2 px-2 py-1 rounded-full text-xs ${
+                  order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  order.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                  order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
+                  order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {order.status?.charAt(0).toUpperCase() + order.status?.slice(1)}
+                </span>
+              </div>
+              <div><span className="font-medium">Vendor:</span> {getVendorName()}</div>
+              <div><span className="font-medium">Order Date:</span> {formatDate(order.orderDate)}</div>
+              <div><span className="font-medium">Invoice Number:</span> {order.invoiceNumber || 'N/A'}</div>
+              <div><span className="font-medium">Total Amount:</span> ${order.totalAmount || 0}</div>
+            </div>
+          </div>
+
+          {/* Additional Information */}
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h4 className="text-md font-semibold text-gray-900 mb-3">Additional Information</h4>
+            <div className="space-y-2 text-sm">
+              <div><span className="font-medium">Estimated Ready:</span> {order.estimatedDateReady || 'N/A'}</div>
+              <div><span className="font-medium">Shipping to Agent:</span> {order.shippingDateToAgent || 'N/A'}</div>
+              <div><span className="font-medium">Shipping to Saudi:</span> {order.shippingDateToSaudi || 'N/A'}</div>
+              <div><span className="font-medium">Arrival Date:</span> {order.arrivalDate || 'N/A'}</div>
+              <div><span className="font-medium">Transfer Amount:</span> ${order.transferAmount || 0}</div>
+              <div><span className="font-medium">Notes:</span> {order.notes || 'No notes'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Order Items */}
+        <div className="mt-6">
+          <h4 className="text-md font-semibold text-gray-900 mb-3">Order Items</h4>
+          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Number</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Price</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {order.items && order.items.length > 0 ? (
+                  order.items.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.itemNumber}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {getProductName(item.productId)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.quantity}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${item.unitPrice || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        ${(item.quantity * (item.unitPrice || 0)).toFixed(2)}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No items found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {order.items && order.items.length > 0 && (
+            <div className="mt-4 text-right">
+              <div className="text-lg font-semibold text-gray-900">
+                Total Items: {order.items.length} | Total Quantity: {order.items.reduce((sum, item) => sum + item.quantity, 0)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Close Button */}
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
