@@ -43,8 +43,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
     { key: 'actions', label: 'ACTIONS', width: 120, type: 'actions' }
   ];
 
-  // Filter columns based on user role - vendors don't see actions column
-  const columns = userIsAdmin ? allColumns : allColumns.filter(col => col.key !== 'actions');
+  // Filter columns based on user role - vendors don't see actions and vendor columns
+  const columns = userIsAdmin ? allColumns : allColumns.filter(col => col.key !== 'actions' && col.key !== 'vendor');
 
   // Ensure orders is always an array
   const safeOrders = Array.isArray(orders) ? orders : [];
@@ -133,18 +133,6 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         // Check both ID and name matches
         const idMatch = orderVendorId === selectedVendor;
         const nameMatch = orderVendorName === selectedVendor;
-        
-        // Debug logging
-        console.log('Vendor Filter Debug:', {
-          selectedVendor,
-          orderVendorId,
-          orderVendorName,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          idMatch,
-          nameMatch,
-          matches: idMatch || nameMatch
-        });
         
         return idMatch || nameMatch;
       });
