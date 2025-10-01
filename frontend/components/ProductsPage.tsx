@@ -29,6 +29,12 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
   const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
 
+  // Consistent price formatting based on role
+  const formatPriceForUser = (value: number) => {
+    if (typeof value !== 'number' || Number.isNaN(value)) return '-';
+    return userIsClient ? `${value.toFixed(2)} RS ريال سعودي` : `¥ ${value.toFixed(2)}`;
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -359,11 +365,11 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             </div>
           ) : (
             /* Grid View */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {filteredProducts.map((product) => {
                 const stats = getProductPurchaseStatsSync(product.id);
                 return (
-                  <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow bg-white/90 backdrop-blur-sm">
+                  <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow bg-white/90 backdrop-blur-sm h-full flex flex-col">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center space-x-3">
                         <div className="h-12 w-12">
@@ -382,31 +388,48 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                           )}
                         </div>
                         <div>
-                          <h4 className="text-lg font-semibold text-gray-900">{product.name}</h4>
+                          <div className="flex items-center space-x-2">
+                            <h4 className="text-lg font-semibold text-gray-900">{product.name}</h4>
+                            {userIsAdmin && (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${((product as any).visibleToClients === false ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200')}`}
+                                title={((product as any).visibleToClients === false ? 'Hidden from clients' : 'Visible to clients')}
+                              >
+                                {((product as any).visibleToClients === false ? 'Hidden' : 'Visible')}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-gray-500 font-mono">{product.itemNumber}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-gray-500">Selling Price</div>
-                        <div className="text-base font-semibold text-gray-900">{typeof (product as any).sellingPrice === 'number' ? (userIsClient ? `${(product as any).sellingPrice.toFixed(2)} RS ريال سعودي` : `¥${(product as any).sellingPrice.toFixed(2)}`) : '-'}</div>
+                      <div className="text-sm text-gray-500">Selling Price</div>
+                        <div className="text-base font-semibold text-gray-900">{formatPriceForUser((product as any).sellingPrice)}</div>
                       </div>
                     </div>
 
-                    <p className="text-sm text-gray-500 mb-4 line-clamp-2">{product.description}</p>
+                    <p className="text-sm text-gray-500 mb-4 line-clamp-2 break-words">{product.description}</p>
 
                     <div className="mb-3">
                       <div className="text-sm text-gray-600">Available Stock</div>
-                      <div className="text-lg font-semibold text-gray-900">
-                        {typeof (product as any).stock === 'number' ? (product as any).stock : 0}
-                        <span className="text-sm text-gray-500 ml-1">units</span>
-                      </div>
+                      {(() => {
+                        const stock = typeof (product as any).stock === 'number' ? (product as any).stock : 0;
+                        const reorder = typeof (product as any).reorderLevel === 'number' ? (product as any).reorderLevel : 0;
+                        const levelClass = stock <= 0 ? 'bg-red-50 text-red-700 ring-red-200' : (stock <= reorder ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200');
+                        const levelText = stock <= 0 ? 'Out of stock' : (stock <= reorder ? 'Low stock' : 'In stock');
+                        return (
+                          <div className="flex items-center space-x-2">
+                            <div className="text-lg font-semibold text-gray-900">{stock}<span className="text-sm text-gray-500 ml-1">units</span></div>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${levelClass}`}>{levelText}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
 
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mt-auto pt-2">
                       {!userIsClient && (
                         <button
                           onClick={() => handleViewHistory(product)}
-                          className="text-green-700 hover:text-green-900 text-sm font-medium"
+                          className="text-green-700 hover:text-green-900 text-sm font-medium w-full sm:w-auto text-left sm:text-inherit"
                           title="View Purchase History"
                         >
                           <span className="inline-flex items-center">
@@ -418,34 +441,51 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                         </button>
                       )}
                       {userIsAdmin ? (
-                        <div className="flex space-x-2">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                          <button
+                            onClick={() => toggleVisibility(product)}
+                            className={`inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium ring-1 transition ${((product as any).visibleToClients === false ? 'bg-gray-50 text-gray-700 ring-gray-200 hover:bg-gray-100' : 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100')}`}
+                            title={((product as any).visibleToClients === false ? 'Show to Clients' : 'Hide from Clients')}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                              {((product as any).visibleToClients === false) ? (
+                                <path d="M10 3C5 3 1.73 7.11 1 10c.73 2.89 4 7 9 7s8.27-4.11 9-7c-.73-2.89-4-7-9-7zm0 12a5 5 0 110-10 5 5 0 010 10z" />
+                              ) : (
+                                <path d="M4.03 3.97a.75.75 0 10-1.06 1.06l1.46 1.46C2.3 7.6 1.27 9.14 1 10c.73 2.89 4 7 9 7 1.67 0 3.16-.44 4.45-1.13l1.52 1.52a.75.75 0 101.06-1.06l-14-14zM10 5c.8 0 1.54.2 2.2.55l-1.2 1.2A2.5 2.5 0 007.75 10c0 .3.05.58.15.84l-1.2 1.2A4 4 0 0110 5z" />
+                              )}
+                            </svg>
+                            {((product as any).visibleToClients === false ? 'Show' : 'Hide')}
+                          </button>
                           <button
                             onClick={() => handleEditProduct(product)}
-                            className="text-blue-700 hover:text-blue-900 text-sm font-medium"
+                            className="inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-blue-700 hover:text-blue-900 ring-1 ring-blue-200 hover:bg-blue-50"
                             title="Edit Product"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M13.586 3.586a2 2 0 112.828 2.828l-8.95 8.95a1 1 0 01-.464.263l-3 0.75a1 1 0 01-1.213-1.213l.75-3a1 1 0 01.263-.464l8.95-8.95z" />
                               <path d="M5 13l2 2" />
                             </svg>
+                            Edit
                           </button>
                           <button
                             onClick={() => handleDeleteProduct(product.id)}
-                            className="text-red-700 hover:text-red-900 text-sm font-medium"
+                            className="inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-700 hover:text-red-900 ring-1 ring-red-200 hover:bg-red-50"
                             title="Delete Product"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                               <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />
                             </svg>
+                            Delete
                           </button>
                         </div>
                       ) : (
-                        <div className="flex space-x-2">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                           <button
                             onClick={() => addToCart(product)}
-                            className="px-3 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow"
+                            className="px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 shadow inline-flex items-center text-sm font-medium w-full sm:w-auto justify-center"
                             title="Add to Cart"
                           >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3a1 1 0 000 2h1l1.2 6A2 2 0 007.18 13h6.64a2 2 0 001.98-1.6l1-5A1 1 0 0015.82 5H6.2l-.2-1A2 2 0 004.05 2H3z"/><path d="M7 16a2 2 0 11-4 0 2 2 0 014 0zm10 2a2 2 0 10-4 0 2 2 0 004 0z"/></svg>
                             Add to Cart
                           </button>
                         </div>
@@ -536,7 +576,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                     <div>
                       <div className="font-medium text-gray-900">{ci.name}</div>
                       <div className="text-xs text-gray-500">Item #{ci.itemNumber}</div>
-                      <div className="text-sm text-gray-700">{`${ci.price.toFixed(2)} RS ريال سعودي`}</div>
+                      <div className="text-sm text-gray-700">{formatPriceForUser(ci.price)}</div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <input
@@ -556,11 +596,11 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             )}
             <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-gray-700">Total items: {cartCount}</div>
-              <div className="text-lg font-semibold text-gray-900">Total: {`${cartTotal.toFixed(2)} RS ريال سعودي`}</div>
+              <div className="text-lg font-semibold text-gray-900">Total: {formatPriceForUser(cartTotal)}</div>
             </div>
             <div className="mt-4 text-right">
-              <button onClick={() => setCartOpen(false)} className="px-4 py-2 rounded border mr-2">Close</button>
-              <button onClick={submitDemandFromCart} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">Send Demand</button>
+              <button onClick={() => setCartOpen(false)} className="px-4 py-2 rounded border hover:bg-gray-50 mr-2">Close</button>
+              <button onClick={submitDemandFromCart} className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={cartItems.length === 0}>Send Demand</button>
             </div>
           </div>
         </div>
@@ -787,9 +827,22 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
         />
         <label htmlFor="visibleToClients" className="text-sm font-medium text-gray-700">Visible to Clients</label>
       </div>
-            <div className="flex justify-end space-x-2 pt-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 rounded border">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white">Save</button>
+            <div className="flex items-center justify-end space-x-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 rounded border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!formData.itemNumber || !formData.name}
+                title={!formData.itemNumber || !formData.name ? 'Item Number and Name are required' : 'Save product'}
+              >
+                Save
+              </button>
             </div>
           </form>
         </div>
