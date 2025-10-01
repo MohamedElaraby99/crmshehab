@@ -436,6 +436,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             </button>
           </div>
         </div>
+
+        
         
         {/* Search + Filters row */}
         <div className="flex flex-wrap items-center gap-3 mt-2">
@@ -529,7 +531,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
               )}
             </div>
           )}
-
+          
           {/* Date range filter (admin only) */}
           {userIsAdmin && (
             <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
@@ -562,6 +564,13 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           )}
         </div>
       </div>
+
+      {userIsAdmin && (
+            <div className="flex items-center space-x-2 text-xs text-gray-600">
+              <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+              <span>Current time: {currentTime.toLocaleTimeString()}</span>
+            </div>
+          )}
 
 
       {/* Excel-like table */}
@@ -642,12 +651,6 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           <span>Ready</span>
           <span>{safeOrders.length} orders</span>
         </div>
-        {userIsAdmin && (
-          <div className="flex items-center space-x-4">
-            <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
-            <span>Current time: {currentTime.toLocaleTimeString()}</span>
-          </div>
-        )}
       </div>
     </div>
   );
