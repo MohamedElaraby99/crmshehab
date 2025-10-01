@@ -354,6 +354,34 @@ export const updateVendorCredentials = async (id: string, credentials: { usernam
   }
 };
 
+// Vendor presence APIs
+export const vendorHeartbeat = async (): Promise<boolean> => {
+  try {
+    const response = await apiRequest('/vendors/me/heartbeat', { method: 'POST', body: JSON.stringify({}) });
+    return !!response?.success;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const vendorOrdersLastRead = async (): Promise<string | null> => {
+  try {
+    const response = await apiRequest('/vendors/me/orders/last-read', { method: 'POST', body: JSON.stringify({}) });
+    return response?.success ? (response?.data?.lastOrdersReadAt || null) : null;
+  } catch (e) {
+    return null;
+  }
+};
+
+export const getVendorsPresenceList = async (): Promise<Array<Pick<Vendor, 'id' | 'name' | 'contactPerson'> & { lastOnlineAt?: string | null; lastOrdersReadAt?: string | null }>> => {
+  try {
+    const response = await apiRequest('/vendors/presence/list');
+    return response?.success ? response?.data : [];
+  } catch (e) {
+    return [];
+  }
+};
+
 // Product functions
 export const getAllProducts = async (): Promise<Product[]> => {
   try {

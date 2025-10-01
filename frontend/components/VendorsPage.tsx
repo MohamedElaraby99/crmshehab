@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Vendor } from '../types';
-import { getAllVendors, createVendor, updateVendor, deleteVendor, updateVendorCredentials } from '../services/api';
+import { getAllVendors, createVendor, updateVendor, deleteVendor, updateVendorCredentials, getVendorsPresenceList, getSocket } from '../services/api';
 
 interface VendorsPageProps {
   onLogout: () => void;
@@ -13,10 +13,40 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [presenceMap, setPresenceMap] = useState<Record<string, { lastOnlineAt?: string | null; lastOrdersReadAt?: string | null }>>({});
   const [showCredentials, setShowCredentials] = useState<Vendor | null>(null);
 
   useEffect(() => {
     fetchVendors();
+    // Load presence
+    (async () => {
+      const list = await getVendorsPresenceList();
+      const map: Record<string, { lastOnlineAt?: string | null; lastOrdersReadAt?: string | null }> = {};
+      list.forEach((v: any) => { map[v.id || v._id] = { lastOnlineAt: v.lastOnlineAt, lastOrdersReadAt: v.lastOrdersReadAt }; });
+      setPresenceMap(map);
+    })();
+    // Realtime updates for presence
+    const socket = getSocket();
+    const onPresence = (p: any) => {
+      setPresenceMap(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || {}), lastOnlineAt: p.lastOnlineAt } }));
+    };
+    const onLastRead = (p: any) => {
+      setPresenceMap(prev => ({ ...prev, [p.id]: { ...(prev[p.id] || {}), lastOrdersReadAt: p.lastOrdersReadAt } }));
+    };
+    socket.on('vendors:presence', onPresence);
+    socket.on('vendors:lastRead', onLastRead);
+    // Periodic refresh every 60s
+    const intervalId = window.setInterval(async () => {
+      const list = await getVendorsPresenceList();
+      const map: Record<string, { lastOnlineAt?: string | null; lastOrdersReadAt?: string | null }> = {};
+      list.forEach((v: any) => { map[v.id || v._id] = { lastOnlineAt: v.lastOnlineAt, lastOrdersReadAt: v.lastOrdersReadAt }; });
+      setPresenceMap(map);
+    }, 60000);
+    return () => {
+      socket.off('vendors:presence', onPresence);
+      socket.off('vendors:lastRead', onLastRead);
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const fetchVendors = async () => {
@@ -30,6 +60,13 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefreshPresence = async () => {
+    const list = await getVendorsPresenceList();
+    const map: Record<string, { lastOnlineAt?: string | null; lastOrdersReadAt?: string | null }> = {};
+    list.forEach((v: any) => { map[v.id || v._id] = { lastOnlineAt: v.lastOnlineAt, lastOrdersReadAt: v.lastOrdersReadAt }; });
+    setPresenceMap(map);
   };
 
   const handleCreateVendor = async (vendorData: Omit<Vendor, 'id' | 'createdAt' | 'updatedAt' | 'username' | 'password' | 'userId'>) => {
@@ -120,12 +157,21 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
             <h1 className="text-3xl font-bold text-gray-900">Vendors Management</h1>
             <p className="mt-2 text-gray-600">Manage your vendor relationships and contact information</p>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Add Vendor
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleRefreshPresence}
+              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none"
+              title="Refresh presence"
+            >
+              Refresh Presence
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Add Vendor
+            </button>
+          </div>
         </div>
         {/* Filters */}
         <div className="mb-6 bg-white p-4 rounded-lg shadow">
@@ -183,6 +229,8 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Online</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Orders Read</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Login Info
                     </th>
@@ -221,6 +269,21 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
                         }`}>
                           {vendor.status}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {(() => {
+                          const p = presenceMap[vendor.id] || {};
+                          const isOnline = p.lastOnlineAt ? (Date.now() - new Date(p.lastOnlineAt as any).getTime() < 2 * 60 * 1000) : false;
+                          return (
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${isOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
+                              <span className={`w-2 h-2 rounded-full mr-2 ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></span>
+                              {isOnline ? 'Online' : 'Offline'}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-600">
+                        {presenceMap[vendor.id]?.lastOrdersReadAt ? new Date(presenceMap[vendor.id]!.lastOrdersReadAt as any).toLocaleString() : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm">

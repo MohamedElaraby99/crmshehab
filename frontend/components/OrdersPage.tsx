@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Order, Vendor, Product } from '../types';
-import { getAllOrders, createOrder, updateOrder, deleteOrder, getAllVendors, getAllProducts, getAllFieldConfigs, FieldConfig, createProduct, updateProduct, uploadProductImage, getApiOrigin, getSocket } from '../services/api';
+import { getAllOrders, createOrder, updateOrder, deleteOrder, getAllVendors, getAllProducts, getAllFieldConfigs, FieldConfig, createProduct, updateProduct, uploadProductImage, getApiOrigin, getSocket, vendorHeartbeat, vendorOrdersLastRead, getCurrentUser } from '../services/api';
 import DynamicOrderForm from './DynamicOrderForm';
 import FieldConfigManager from './FieldConfigManager';
 import { OrderFieldConfig } from '../data/orderFieldConfig';
@@ -26,6 +26,19 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
 
   useEffect(() => {
     fetchData();
+    // Vendor presence: mark last-read and start heartbeat if vendor
+    (async () => {
+      try {
+        const user = await getCurrentUser();
+        if (user?.role === 'vendor') {
+          // mark last read once
+          vendorOrdersLastRead().catch(() => {});
+          // start heartbeat
+          const id = window.setInterval(() => { vendorHeartbeat().catch(() => {}); }, 60000);
+          return () => window.clearInterval(id);
+        }
+      } catch {}
+    })();
     // Realtime updates
     const socket = getSocket();
     const handleCreated = (order: Order) => {

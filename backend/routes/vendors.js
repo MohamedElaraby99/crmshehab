@@ -483,4 +483,44 @@ router.put('/:id/credentials', [
   }
 });
 
+// Vendor heartbeat (online presence)
+router.post('/me/heartbeat', authenticateVendor, async (req, res) => {
+  try {
+    await Vendor.findByIdAndUpdate(req.vendor._id, { lastOnlineAt: new Date() }, { new: false });
+    // Optional: broadcast presence via socket
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('vendors:presence', { id: String(req.vendor._id), lastOnlineAt: new Date().toISOString() });
+    } catch {}
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Vendor marks orders table as read
+router.post('/me/orders/last-read', authenticateVendor, async (req, res) => {
+  try {
+    const ts = new Date();
+    await Vendor.findByIdAndUpdate(req.vendor._id, { lastOrdersReadAt: ts }, { new: false });
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('vendors:lastRead', { id: String(req.vendor._id), lastOrdersReadAt: ts.toISOString() });
+    } catch {}
+    res.json({ success: true, data: { lastOrdersReadAt: ts.toISOString() } });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Admin: list vendor presence/read status
+router.get('/presence/list', authenticateUser, requireAdmin, async (req, res) => {
+  try {
+    const vendors = await Vendor.find({ isActive: true }).select('name contactPerson lastOnlineAt lastOrdersReadAt');
+    res.json({ success: true, data: vendors });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 module.exports = router;

@@ -80,6 +80,14 @@ const vendorSchema = new mongoose.Schema({
   updatedAt: {
     type: Date,
     default: Date.now
+  },
+  lastOnlineAt: {
+    type: Date,
+    default: null
+  },
+  lastOrdersReadAt: {
+    type: Date,
+    default: null
   }
 });
 

@@ -117,6 +117,8 @@ export interface Vendor {
   userId?: string; // Link to User table
   createdAt: string;
   updatedAt: string;
+  lastOnlineAt?: string | null;
+  lastOrdersReadAt?: string | null;
 }
 
 export interface Demand {
