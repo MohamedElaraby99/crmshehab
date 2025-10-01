@@ -642,9 +642,25 @@ router.put('/:id', [
         // Directly apply simple fields in case path-based merge is skipped later
         if (req.body.priceApprovalStatus !== undefined) {
           order.items[itemIndex].priceApprovalStatus = req.body.priceApprovalStatus;
+          // If approved, auto-set confirmFormShehab to today's date (admin-triggered)
+          try {
+            const isAdmin = !!(req.user && req.user.role === 'admin');
+            if (isAdmin && String(req.body.priceApprovalStatus).toLowerCase() === 'approved') {
+              const today = new Date().toISOString().split('T')[0];
+              order.items[itemIndex].confirmFormShehab = today;
+            }
+          } catch {}
         }
         if (req.body.itemPriceApprovalStatus !== undefined) {
           order.items[itemIndex].priceApprovalStatus = req.body.itemPriceApprovalStatus;
+          // If approved, auto-set confirmFormShehab to today's date (admin-triggered)
+          try {
+            const isAdmin = !!(req.user && req.user.role === 'admin');
+            if (isAdmin && String(req.body.itemPriceApprovalStatus).toLowerCase() === 'approved') {
+              const today = new Date().toISOString().split('T')[0];
+              order.items[itemIndex].confirmFormShehab = today;
+            }
+          } catch {}
         }
         if (req.body.priceApprovalRejectionReason !== undefined) {
           order.items[itemIndex].priceApprovalRejectionReason = req.body.priceApprovalRejectionReason;
@@ -1169,6 +1185,27 @@ router.post('/:id/item/:itemIndex/image', [authenticateUserOrVendor, upload.sing
     await order.save();
     
     console.log('Order saved successfully with item image');
+    
+    // Also append this image to the related product's images (newest first)
+    try {
+      const productId = order.items[itemIndex]?.productId;
+      if (productId) {
+        const product = await Product.findById(productId);
+        if (product && product.isActive !== false) {
+          const images = Array.isArray(product.images) ? product.images : [];
+          if (!images.includes(imagePath)) images.unshift(imagePath);
+          product.images = images;
+          await product.save();
+          try {
+            const io = req.app.get('io');
+            if (io) io.emit('products:updated', { id: String(product._id), images: product.images });
+          } catch {}
+          console.log('Appended image to product.images:', { productId: String(product._id), imagePath });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to append image to product.images', e);
+    }
 
     // Fetch the updated order to emit a full payload
     let fullAfterItemImage = null;

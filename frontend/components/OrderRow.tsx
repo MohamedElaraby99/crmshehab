@@ -135,7 +135,7 @@ const EditableCell: React.FC<{
     return String(val);
   };
 
-  // Get color classes for priceApprovalStatus
+  // Get color classes for status-like fields
   const getStatusColorClasses = (value: string | number | null) => {
     const status = String(value).toLowerCase();
     switch (status) {
@@ -150,9 +150,9 @@ const EditableCell: React.FC<{
   };
 
   if (!isEditable && !isEditing) {
-    // Apply color coding for priceApprovalStatus field
-    const statusClasses = fieldName === 'priceApprovalStatus' ? getStatusColorClasses(value) : '';
-    const finalCellClasses = fieldName === 'priceApprovalStatus' 
+    // Apply color coding for item price approval status field
+    const statusClasses = fieldName === 'itemPriceApprovalStatus' ? getStatusColorClasses(value) : '';
+    const finalCellClasses = fieldName === 'itemPriceApprovalStatus' 
       ? `${cellClasses} ${statusClasses} font-medium rounded` 
       : cellClasses;
     
@@ -168,9 +168,9 @@ const EditableCell: React.FC<{
     );
   }
 
-  // Apply color coding for priceApprovalStatus field when editing
-  const statusClasses = fieldName === 'priceApprovalStatus' ? getStatusColorClasses(value) : '';
-  const finalCellClasses = fieldName === 'priceApprovalStatus' 
+  // Apply color coding for item price approval status field when editing
+  const statusClasses = fieldName === 'itemPriceApprovalStatus' ? getStatusColorClasses(value) : '';
+  const finalCellClasses = fieldName === 'itemPriceApprovalStatus' 
     ? `${cellClasses} ${statusClasses} font-medium rounded` 
     : cellClasses;
 

@@ -7,7 +7,7 @@ const inferApiBaseUrl = (): string => {
   if (envUrl) return envUrl.replace(/\/$/, '');
   try {
     const host = (typeof window !== 'undefined' ? window.location.host : '');
-    if (host === 'crm.fikra.solutions') return 'https://api.crm.fikra.solutions/api';
+    // if (host === 'crm.fikra.solutions') return 'https://api.crm.fikra.solutions/api';
   } catch {}
   return 'http://localhost:4031/api';
 };
