@@ -130,10 +130,10 @@ router.get('/', authenticateUser, async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
-    // Normalize and backfill stock if zero
+    // Normalize and backfill stock only if stock is not set (do not override 0)
     const normalized = await Promise.all(products.map(async (p) => {
       const obj = normalizeProduct(p);
-      if (!obj.stock || obj.stock === 0) {
+      if (obj.stock === undefined || obj.stock === null) {
         obj.stock = await computeStockFromConfirmed(obj.id);
       }
       return obj;
@@ -191,10 +191,19 @@ router.get('/visible/list', authenticateUser, async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
+    // Normalize and backfill stock only if stock is not set (match admin behavior)
+    const normalized = await Promise.all(products.map(async (p) => {
+      const obj = normalizeProduct(p);
+      if (obj.stock === undefined || obj.stock === null) {
+        obj.stock = await computeStockFromConfirmed(obj.id);
+      }
+      return obj;
+    }));
+
     res.set('Cache-Control', 'no-store');
     res.json({
       success: true,
-      data: products.map(p => normalizeProduct(p)),
+      data: normalized.map(p => normalizeProduct(p)),
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -240,10 +249,19 @@ router.get('/visible', authenticateUser, async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
+    // Normalize and backfill stock only if stock is not set (match admin behavior)
+    const normalized = await Promise.all(products.map(async (p) => {
+      const obj = normalizeProduct(p);
+      if (obj.stock === undefined || obj.stock === null) {
+        obj.stock = await computeStockFromConfirmed(obj.id);
+      }
+      return obj;
+    }));
+
     res.set('Cache-Control', 'no-store');
     res.json({
       success: true,
-      data: products.map(p => normalizeProduct(p)),
+      data: normalized.map(p => normalizeProduct(p)),
       pagination: {
         current: parseInt(page),
         pages: Math.ceil(total / limit),
@@ -269,7 +287,7 @@ router.get('/:id', authenticateUser, async (req, res) => {
     }
 
     const obj = normalizeProduct(product);
-    if (!obj.stock || obj.stock === 0) {
+    if (obj.stock === undefined || obj.stock === null) {
       obj.stock = await computeStockFromConfirmed(obj.id);
     }
 

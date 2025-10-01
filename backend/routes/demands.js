@@ -129,7 +129,7 @@ router.put('/:id/status', authenticateUser, async (req, res) => {
     const demand = await Demand.findById(existing._id).populate('productId', 'name itemNumber').populate('userId', 'username');
     if (!demand) return res.status(404).json({ success: false, message: 'Demand not found' });
 
-    // Adjust product stock on confirmation transitions with validation
+    // Adjust product stock on confirmation transitions (allow confirm even if out of stock)
     try {
       const Product = require('../models/Product');
       // Reduce stock when moving into confirmed
@@ -139,9 +139,7 @@ router.put('/:id/status', authenticateUser, async (req, res) => {
           return res.status(404).json({ success: false, message: 'Product not found' });
         }
         const qty = existing.quantity || 0;
-        if (typeof product.stock === 'number' && product.stock < qty) {
-          return res.status(400).json({ success: false, message: 'Out of stock' });
-        }
+        // Atomic decrement to avoid race conditions
         await Product.findByIdAndUpdate(existing.productId, { $inc: { stock: -qty } });
       }
       // Optional rollback: if moving out of confirmed, restore stock

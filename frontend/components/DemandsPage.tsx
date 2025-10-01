@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePDF } from 'react-to-pdf';
 import { Demand, Product, User } from '../types';
-import { getAllDemands, getAllProducts, getAllUsers, getSocket, updateDemandStatus, getWhatsAppRecipients, sendDemandReportToWhatsApp } from '../services/api';
+import { getAllDemands, getAllProducts, getAllUsers, getSocket, updateDemandStatus, getWhatsAppRecipients, sendDemandReportToWhatsApp, updateProduct } from '../services/api';
 
 interface DemandsPageProps {
   onLogout: () => void;
@@ -293,11 +293,15 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
                       const currentStock = typeof fullProd?.stock === 'number' ? fullProd.stock : 0;
                       const qty = d.quantity || 0;
                       if (currentStock < qty) {
-                        alert('Out of stock');
-                        return;
+                        const proceed = window.confirm('This item is out of stock. Approve the demand anyway?');
+                        if (!proceed) return;
                       }
                       const ok = await updateDemandStatus((d.id || d._id), 'confirmed');
-                      if (ok) { await fetchData(); setSelectedDemand(null); }
+                      if (ok) {
+                        // Stock update is handled server-side on confirmation; refresh UI only
+                        await fetchData();
+                        setSelectedDemand(null);
+                      }
                     }}
                   >Confirm</button>
                   <button
