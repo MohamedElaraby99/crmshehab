@@ -758,45 +758,20 @@ router.post('/import/excel', [authenticateUser, requireAdmin, excelUpload.single
         const itemNumber = String(get(row, ['OEM', 'Item', 'Item Number', 'Part Number', '编号', 'itemNumber']) || '').trim();
         const name = String(get(row, ['Name', 'Product', 'Description', '名称', 'name']) || '').trim() || itemNumber;
         const quantity = Number(get(row, ['Quantity', 'Qty', '数量', 'stock'])) || 0;
-        const unitPrice = Number(String(get(row, ['UNIT PRICE', 'Unit Price', 'Price', '价格', 'sellingPrice'])).replace(/[^0-9.\-]/g, ''));
-        // Picture may be a URL or an image file name in the same folder (unsupported), keep URL support
-        const picture = String(get(row, ['Picture', 'Image', '图片', 'picture'])).trim();
 
         if (!itemNumber) { results.skipped++; continue; }
 
         let product = await Product.findOne({ itemNumber });
         if (!product) {
-          product = new Product({ itemNumber, name, description: '', stock: quantity, ...(Number.isFinite(unitPrice) ? { sellingPrice: unitPrice } : {}) });
+          product = new Product({ itemNumber, name, description: '', stock: quantity });
           await product.save();
           results.created++;
         } else {
           product.name = name || product.name;
-          if (Number.isFinite(unitPrice)) product.sellingPrice = unitPrice;
           if (Number.isFinite(quantity)) product.stock = quantity;
           if (product.isActive === false) product.isActive = true;
           await product.save();
           results.updated++;
-        }
-
-        // If picture is a URL, attempt to download and attach as first image
-        if (picture && /^https?:\/\/./i.test(picture)) {
-          try {
-            const _fetch = await getFetch();
-            const resp = await _fetch(picture);
-            if (resp.ok) {
-              const buf = Buffer.from(await resp.arrayBuffer());
-              const ext = (path.extname(new URL(picture).pathname) || '.jpg').slice(0,10);
-              const fname = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-              const outPath = path.join(__dirname, '..', 'upload', fname);
-              fs.writeFileSync(outPath, buf);
-              const images = Array.isArray(product.images) ? product.images : [];
-              images.unshift(`/upload/${fname}`);
-              product.images = images;
-              await product.save();
-            }
-          } catch (e) {
-            results.errors.push({ itemNumber, message: 'Image download failed', error: String(e.message || e) });
-          }
         }
       } catch (e) {
         results.errors.push({ row, message: 'Row processing failed', error: String(e.message || e) });
@@ -882,11 +857,44 @@ router.post('/invoices/import', [authenticateUser, requireAdmin, excelUpload.sin
     const preview = [];
     let appliedCount = 0;
 
+    // Pre-compute column indexes by fuzzy header match
+    const findColIndex = (predicates) => {
+      for (let i = 0; i < headerRow.length; i++) {
+        const h = normalizeHeader(headerRow[i]);
+        if (predicates.some(p => p(h))) return i;
+      }
+      return -1;
+    };
+    const itemIdx = findColIndex([
+      h => h.includes('oem'),
+      h => h.includes('item') && (h.includes('num') || h.includes('number') || h.includes('nur')), // handle typos like 'Nur'
+      h => h.includes('part')
+    ]);
+    const qtyIdx = findColIndex([
+      h => h.includes('qty'),
+      h => h.includes('quant')
+    ]);
+    const paidIdx = findColIndex([
+      h => h.includes('paid'),
+      h => h.includes('status'),
+      h => h.includes('payment')
+    ]);
+
     for (const row of rows) {
-      const itemNumber = String(get(row, ['OEM', 'Item', 'Item Number', 'Part Number', 'itemNumber'] ) || '').trim();
-      const quantityRaw = get(row, ['Quantity', 'Qty', 'QTY', '数量']);
+      // Prefer key-based extraction; fallback to column index; final fallback: first non-empty cell
+      let itemNumber = String(get(row, ['OEM', 'Item', 'Item Number', 'OEM/Item Number', 'Part Number', 'itemNumber']) || '').trim();
+      if (!itemNumber && itemIdx >= 0) itemNumber = String(row[headerRow[itemIdx]] || row[itemIdx] || '').trim();
+      if (!itemNumber) {
+        const firstVal = Object.values(row).find(v => String(v || '').trim() !== '');
+        if (firstVal) itemNumber = String(firstVal).trim();
+      }
+
+      let quantityRaw = get(row, ['Quantity', 'Qty', 'QTY', '数量']);
+      if (quantityRaw === undefined && qtyIdx >= 0) quantityRaw = row[headerRow[qtyIdx]] ?? row[qtyIdx];
       const qty = Number(String(quantityRaw || '').replace(/[^0-9.\-]/g, '')) || 0;
-      const statusRaw = String(get(row, ['Paid', 'Status', 'Payment Status']) || '').trim();
+
+      let statusRaw = String(get(row, ['Paid', 'Status', 'Payment Status']) || '').trim();
+      if (!statusRaw && paidIdx >= 0) statusRaw = String(row[headerRow[paidIdx]] ?? row[paidIdx] ?? '').trim();
       const isPaid = /^(paid|yes|true|تم|مدفوع)$/i.test(statusRaw);
 
       if (!itemNumber || qty <= 0) {

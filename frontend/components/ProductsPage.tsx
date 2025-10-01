@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { Product, ProductPurchase, User } from '../types';
 import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, getMyDemands, importProductsFromExcel, importInvoiceFromExcel } from '../services/api';
 import { createDemand } from '../services/api';
@@ -28,6 +29,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState<Array<{ itemNumber: string; quantity: number; paid: boolean; matched: boolean; name?: string; currentStock?: number; newStock?: number; reason?: string }>>([]);
   const [invoiceApplying, setInvoiceApplying] = useState(false);
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
 
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
   const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
@@ -539,7 +541,28 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
               <button onClick={() => setShowImportModal(false)} className="text-gray-600 hover:text-gray-800">✕</button>
             </div>
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">Upload a .xlsx/.xls/.csv file. Columns supported: <span className="font-mono">OEM, Picture (URL), Quantity, UNIT PRICE, AMOUNT</span>. We create/update by OEM as itemNumber. Images can be URLs.</p>
+              <p className="text-sm text-gray-600">Upload a .xlsx/.xls/.csv file. Columns supported: <span className="font-mono">OEM, Quantity</span>. We create/update by OEM as itemNumber and set stock to Quantity.</p>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  className="px-3 py-2 text-sm rounded border hover:bg-gray-50"
+                  onClick={() => {
+                    try {
+                      const aoa: any[][] = [];
+                      aoa.push(['OEM', 'Quantity']);
+                      aoa.push(['123-ABC', 10]);
+                      const ws = XLSX.utils.aoa_to_sheet(aoa);
+                      const wb = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(wb, ws, 'Template');
+                      XLSX.writeFile(wb, 'product_import_template.xlsx');
+                    } catch (e) {
+                      console.error('Failed to generate template', e);
+                      alert('Failed to generate template');
+                    }
+                  }}
+                >Download Template</button>
+                <span className="text-xs text-gray-500">Tip: Fill OEM (item number) and Quantity.</span>
+              </div>
               <input
                 type="file"
                 accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
@@ -580,6 +603,27 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             </div>
             <div className="space-y-3">
               <p className="text-sm text-gray-600">Upload an invoice file. Expected columns: <span className="font-mono">OEM/Item Number, Quantity, Paid/Status</span>. Only rows marked Paid will reduce stock when you click Apply.</p>
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  className="px-3 py-2 text-sm rounded border hover:bg-gray-50"
+                  onClick={() => {
+                    try {
+                      const aoa: any[][] = [];
+                      aoa.push(['OEM/Item Number', 'Quantity', 'Paid']);
+                      aoa.push(['123-ABC', 2, 'Paid']);
+                      const ws = XLSX.utils.aoa_to_sheet(aoa);
+                      const wb = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(wb, ws, 'Template');
+                      XLSX.writeFile(wb, 'invoice_import_template.xlsx');
+                    } catch (e) {
+                      console.error('Failed to generate invoice template', e);
+                      alert('Failed to generate template');
+                    }
+                  }}
+                >Download Template</button>
+                <span className="text-xs text-gray-500">Mark Paid rows as Paid/Yes/True/تم/مدفوع.</span>
+              </div>
               <input
                 type="file"
                 accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
@@ -587,6 +631,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                   const file = e.target.files?.[0];
                   if (!file) return;
                   setInvoiceApplying(true);
+                  setInvoiceFile(file);
                   const res = await importInvoiceFromExcel(file, false);
                   setInvoiceApplying(false);
                   if (res?.success) {
@@ -634,30 +679,24 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
               <div className="text-xs text-gray-500">We match by OEM/Item Number to product `itemNumber`.</div>
             </div>
             <div className="mt-4 text-right">
-              <button onClick={() => { setShowInvoiceModal(false); setInvoicePreview([]); }} className="px-4 py-2 rounded border hover:bg-gray-50 mr-2">Close</button>
+              <button onClick={() => { setShowInvoiceModal(false); setInvoicePreview([]); setInvoiceFile(null); }} className="px-4 py-2 rounded border hover:bg-gray-50 mr-2">Close</button>
               <button
-                disabled={invoicePreview.length === 0}
+                disabled={invoicePreview.length === 0 || !invoiceFile}
                 onClick={async () => {
+                  if (!invoiceFile) return;
                   try {
-                    const fileInput = document.createElement('input');
-                    fileInput.type = 'file';
-                    fileInput.accept = '.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv';
-                    fileInput.onchange = async () => {
-                      const file = fileInput.files?.[0];
-                      if (!file) return;
-                      setInvoiceApplying(true);
-                      const res = await importInvoiceFromExcel(file, true);
-                      setInvoiceApplying(false);
-                      if (res?.success) {
-                        alert(`Applied. Updated rows: ${res.data?.appliedCount || 0}`);
-                        setShowInvoiceModal(false);
-                        setInvoicePreview([]);
-                        await fetchData();
-                      } else {
-                        alert(res?.message || 'Failed to apply invoice');
-                      }
-                    };
-                    fileInput.click();
+                    setInvoiceApplying(true);
+                    const res = await importInvoiceFromExcel(invoiceFile, true);
+                    setInvoiceApplying(false);
+                    if (res?.success) {
+                      alert(`Applied. Updated rows: ${res.data?.appliedCount || 0}`);
+                      setShowInvoiceModal(false);
+                      setInvoicePreview([]);
+                      setInvoiceFile(null);
+                      await fetchData();
+                    } else {
+                      alert(res?.message || 'Failed to apply invoice');
+                    }
                   } catch {}
                 }}
                 className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
