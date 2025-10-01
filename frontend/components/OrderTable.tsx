@@ -537,12 +537,17 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         </div>
       </div>
 
+      <div className="flex items-center space-x-2 text-xs text-gray-600">
+          <span>Last updated: {new Date().toLocaleTimeString()}</span>
+        </div>
+
       {/* Excel-like table */}
       <div 
         ref={tableRef}
         className="overflow-auto max-h-96"
         style={{ fontFamily: 'Arial, sans-serif' }}
       >
+        
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-gray-200 border-b border-gray-300">
@@ -614,9 +619,9 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           <span>Ready</span>
           <span>{safeOrders.length} orders</span>
         </div>
-        <div className="flex items-center space-x-2">
+        {/* <div className="flex items-center space-x-2">
           <span>Last updated: {new Date().toLocaleTimeString()}</span>
-        </div>
+        </div> */}
       </div>
     </div>
   );
