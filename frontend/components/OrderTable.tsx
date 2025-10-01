@@ -26,6 +26,8 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   const tableRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState<string | null>(null);
   const scrollPositionRef = useRef<{ scrollTop: number; scrollLeft: number }>({ scrollTop: 0, scrollLeft: 0 });
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   // Excel-like column configuration with widths
   const allColumns = [
@@ -114,6 +116,30 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
       });
     }
   }, [orders]);
+
+  // Update lastUpdated timestamp when orders change
+  useEffect(() => {
+    setLastUpdated(new Date());
+  }, [orders]);
+
+  // Real-time clock for admin users (updates every minute)
+  useEffect(() => {
+    if (!userIsAdmin) return;
+
+    const updateTime = () => {
+      setCurrentTime(new Date());
+    };
+
+    // Update immediately
+    updateTime();
+
+    // Set up interval to update every minute
+    const interval = setInterval(updateTime, 60000); // 60000ms = 1 minute
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [userIsAdmin]);
 
   // Search and filter functionality
   const filterOrders = (orders: Order[]) => {
@@ -537,9 +563,6 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         </div>
       </div>
 
-      <div className="flex items-center space-x-2 text-xs text-gray-600">
-          <span>Last updated: {new Date().toLocaleTimeString()}</span>
-        </div>
 
       {/* Excel-like table */}
       <div 
@@ -619,9 +642,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           <span>Ready</span>
           <span>{safeOrders.length} orders</span>
         </div>
-        {/* <div className="flex items-center space-x-2">
-          <span>Last updated: {new Date().toLocaleTimeString()}</span>
-        </div> */}
+        {userIsAdmin && (
+          <div className="flex items-center space-x-4">
+            <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+            <span>Current time: {currentTime.toLocaleTimeString()}</span>
+          </div>
+        )}
       </div>
     </div>
   );
