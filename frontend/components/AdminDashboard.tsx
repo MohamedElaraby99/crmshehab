@@ -330,7 +330,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                       }).length}
                     </span>
                   </div>
-                  <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                    <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
                     {vendors
                       .map(v => ({
                         v,
@@ -343,9 +343,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout }) => {
                             <span className={`w-2 h-2 rounded-full mr-2 ${online ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
                             <div className="text-sm text-gray-800">{v.name}</div>
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {presenceMap[v.id]?.lastOnlineAt ? new Date(presenceMap[v.id]!.lastOnlineAt as any).toLocaleTimeString() : '—'}
-                          </div>
+                            <div className="text-xs text-gray-500 text-right">
+                              <div>Online: {presenceMap[v.id]?.lastOnlineAt ? new Date(presenceMap[v.id]!.lastOnlineAt as any).toLocaleTimeString() : '—'}</div>
+                              <div>Last read: {presenceMap[v.id]?.lastOrdersReadAt ? new Date(presenceMap[v.id]!.lastOrdersReadAt as any).toLocaleTimeString() : '—'}</div>
+                            </div>
                         </div>
                       ))}
                   </div>
