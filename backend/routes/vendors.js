@@ -498,6 +498,20 @@ router.post('/me/heartbeat', authenticateVendor, async (req, res) => {
   }
 });
 
+// Vendor set offline explicitly (e.g., on logout/close)
+router.post('/me/offline', authenticateVendor, async (req, res) => {
+  try {
+    await Vendor.findByIdAndUpdate(req.vendor._id, { lastOnlineAt: null }, { new: false });
+    try {
+      const io = req.app.get('io');
+      if (io) io.emit('vendors:presence', { id: String(req.vendor._id), lastOnlineAt: null });
+    } catch {}
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
 // Vendor marks orders table as read
 router.post('/me/orders/last-read', authenticateVendor, async (req, res) => {
   try {

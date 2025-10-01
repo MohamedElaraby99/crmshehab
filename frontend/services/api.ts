@@ -1003,3 +1003,28 @@ export const resetFieldConfigs = async (): Promise<FieldConfig[]> => {
     return [];
   }
 };
+
+export const vendorOffline = async (): Promise<boolean> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    const url = `${API_BASE_URL}/vendors/me/offline`;
+    if (navigator.sendBeacon && token) {
+      const blob = new Blob([JSON.stringify({})], { type: 'application/json' });
+      // sendBeacon cannot set headers; include token in query as fallback
+      const ok = navigator.sendBeacon(`${url}?t=${encodeURIComponent(token)}`, blob);
+      return ok;
+    }
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: JSON.stringify({}),
+      keepalive: true,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};

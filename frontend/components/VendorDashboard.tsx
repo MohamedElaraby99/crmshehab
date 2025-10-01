@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Vendor, Order } from '../types';
-import { getVendorById, getOrdersByVendorId, updateOrder as apiUpdateOrder, getAllOrders, updateVendorByVendor, vendorHeartbeat } from '../services/api';
+import { getVendorById, getOrdersByVendorId, updateOrder as apiUpdateOrder, getAllOrders, updateVendorByVendor, vendorHeartbeat, vendorOffline } from '../services/api';
 import OrderTable from './OrderTable';
 import ProductHistoryModal from './ProductHistoryModal';
 import DynamicOrderForm from './DynamicOrderForm';
@@ -23,8 +23,10 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
     fetchDashboardData();
     // Send immediate heartbeat, then keep-alive every 20s
     vendorHeartbeat().catch(() => {});
-    const id = window.setInterval(() => { vendorHeartbeat().catch(() => {}); }, 1000);
-    return () => window.clearInterval(id);
+    const id = window.setInterval(() => { vendorHeartbeat().catch(() => {}); }, 20000);
+    const handleBeforeUnload = () => { try { vendorOffline(); } catch {} };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => { window.clearInterval(id); window.removeEventListener('beforeunload', handleBeforeUnload); };
   }, [user]);
 
   const fetchDashboardData = async () => {
