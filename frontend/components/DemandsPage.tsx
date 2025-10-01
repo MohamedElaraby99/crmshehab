@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { usePDF } from 'react-to-pdf';
 import { Demand, Product, User } from '../types';
 import { getAllDemands, getAllProducts, getAllUsers, getSocket, updateDemandStatus, getWhatsAppRecipients, sendDemandReportToWhatsApp, updateProduct } from '../services/api';
@@ -215,6 +216,53 @@ const DemandsPage: React.FC<DemandsPageProps> = ({ onLogout }) => {
                       toPDF({ filename: `demand_${(d._id || d.id || 'report')}.pdf` });
                     }}
                   >Export PDF</button>
+                  <button
+                    className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                    onClick={() => {
+                      try {
+                        const d = selectedDemand as any;
+                        const p: any = d.productId;
+                        const u: any = d.userId;
+                        const username = typeof u === 'string' ? (users.find(us => us.id === u)?.username || u) : (u?.username || '');
+                        const selTs = new Date(d.createdAt).getTime();
+                        const bundle = demands.filter(dm => {
+                          const sameUser = String((dm.userId as any)?._id || (dm.userId as any)?.id || dm.userId) === String((u?._id || u?.id || u));
+                          const dt = Math.abs(new Date(dm.createdAt).getTime() - selTs);
+                          return sameUser && dt <= 60000; // within 60 seconds window
+                        });
+                        const items = (bundle.length ? bundle : [d]).map((bd: any) => {
+                          const bp: any = bd.productId;
+                          const pid = typeof bp === 'string' ? bp : (bp?._id || bp?.id || '');
+                          const fullProd: any = products.find(pr => (pr as any).id === pid);
+                          const src = fullProd || (typeof bp === 'object' ? bp : null);
+                          const name = src?.name || '';
+                          const item = src?.itemNumber || '';
+                          const price = typeof src?.sellingPrice === 'number' ? src.sellingPrice : (typeof fullProd?.sellingPrice === 'number' ? fullProd.sellingPrice : 0);
+                          const qty = bd.quantity || 0;
+                          return { item, name, price: Number(price || 0), qty, lineTotal: Number(price || 0) * qty };
+                        });
+                        const total = items.reduce((sum, it) => sum + it.lineTotal, 0);
+                        const aoa: any[][] = [];
+                        aoa.push(['Demand Report']);
+                        aoa.push(['Date', new Date(d.createdAt).toLocaleString()]);
+                        aoa.push(['User', username]);
+                        aoa.push(['Notes', d.notes || '—']);
+                        aoa.push([]);
+                        aoa.push(['Item Number', 'Name', 'Unit Price', 'Quantity', 'Line Total']);
+                        items.forEach(it => aoa.push([it.item, it.name, it.price, it.qty, it.lineTotal]));
+                        aoa.push([]);
+                        aoa.push(['Total', '', '', '', total]);
+                        const ws = XLSX.utils.aoa_to_sheet(aoa);
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, 'Demand');
+                        const fname = `demand_${(d._id || d.id || 'report')}.xlsx`;
+                        XLSX.writeFile(wb, fname);
+                      } catch (e) {
+                        console.error('Excel export failed:', e);
+                        alert('Failed to export Excel');
+                      }
+                    }}
+                  >Export Excel</button>
                   {whatsappRecipients.length > 0 && (
                     <div className="inline-block relative group">
                       <button className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 inline-flex items-center">

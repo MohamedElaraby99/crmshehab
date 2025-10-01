@@ -817,3 +817,124 @@ router.post('/import/excel', [authenticateUser, requireAdmin, excelUpload.single
     res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
+
+// Import invoice from Excel/CSV and optionally reduce stock for paid rows
+router.post('/invoices/import', [authenticateUser, requireAdmin, excelUpload.single('file')], async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    // Lazy require xlsx to keep cold start fast
+    if (!xlsx) xlsx = require('xlsx');
+
+    const apply = String(req.query.apply || req.body.apply || 'false').toLowerCase() === 'true';
+
+    const filePath = req.file.path;
+    const workbook = xlsx.readFile(filePath, { cellDates: false });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    const aoa = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const norm = (v) => String(v || '').replace(/\s+/g, ' ').trim();
+    const normLower = (v) => norm(v).toLowerCase();
+
+    // Find header row heuristically: must contain an item number like OEM/Item Number and possibly Quantity
+    const headerCandidates = ['oem', 'item number', 'part number', 'item', 'code'];
+    let headerIndex = -1;
+    for (let i = 0; i < Math.min(aoa.length, 20); i++) {
+      const row = aoa[i] || [];
+      const tokens = row.map(normLower).filter(Boolean);
+      if (tokens.length === 0) continue;
+      const hasKey = headerCandidates.some(k => tokens.some(t => t.includes(k)));
+      if (hasKey) { headerIndex = i; break; }
+    }
+    if (headerIndex === -1) {
+      headerIndex = aoa.findIndex(r => (r || []).some(c => norm(c) !== ''));
+      if (headerIndex === -1) headerIndex = 0;
+    }
+
+    const headerRow = (aoa[headerIndex] || []).map(h => String(h || ''));
+    const normalizeHeader = (h) => String(h || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const rows = [];
+    for (let i = headerIndex + 1; i < aoa.length; i++) {
+      const r = aoa[i] || [];
+      if ((r.every(c => String(c).trim() === ''))) continue; // skip empty rows
+      const obj = {};
+      for (let c = 0; c < headerRow.length; c++) {
+        const key = headerRow[c] || `COL_${c}`;
+        obj[key] = r[c];
+      }
+      rows.push(obj);
+    }
+
+    const get = (row, keys) => {
+      for (const k of keys) {
+        if (k in row && String(row[k]).trim() !== '') return row[k];
+      }
+      const map = Object.fromEntries(Object.entries(row).map(([k, v]) => [normalizeHeader(k), v]));
+      for (const k of keys.map(normalizeHeader)) {
+        if (k in map && String(map[k]).trim() !== '') return map[k];
+      }
+      return undefined;
+    };
+
+    const preview = [];
+    let appliedCount = 0;
+
+    for (const row of rows) {
+      const itemNumber = String(get(row, ['OEM', 'Item', 'Item Number', 'Part Number', 'itemNumber'] ) || '').trim();
+      const quantityRaw = get(row, ['Quantity', 'Qty', 'QTY', '数量']);
+      const qty = Number(String(quantityRaw || '').replace(/[^0-9.\-]/g, '')) || 0;
+      const statusRaw = String(get(row, ['Paid', 'Status', 'Payment Status']) || '').trim();
+      const isPaid = /^(paid|yes|true|تم|مدفوع)$/i.test(statusRaw);
+
+      if (!itemNumber || qty <= 0) {
+        preview.push({ itemNumber, quantity: qty, paid: isPaid, matched: false, reason: 'Missing item number or qty' });
+        continue;
+      }
+
+      const product = await Product.findOne({ itemNumber });
+      if (!product || product.isActive === false) {
+        preview.push({ itemNumber, quantity: qty, paid: isPaid, matched: false, reason: 'Product not found' });
+        continue;
+      }
+
+      let newStock = product.stock;
+      if (apply && isPaid) {
+        await Product.findByIdAndUpdate(product._id, { $inc: { stock: -qty } });
+        newStock = (product.stock || 0) - qty;
+        appliedCount++;
+      } else if (isPaid) {
+        newStock = (product.stock || 0) - qty;
+      }
+
+      preview.push({
+        itemNumber,
+        productId: String(product._id),
+        name: product.name,
+        quantity: qty,
+        paid: isPaid,
+        matched: true,
+        currentStock: product.stock || 0,
+        newStock
+      });
+    }
+
+    // Clean up uploaded file
+    try { fs.unlinkSync(filePath); } catch {}
+
+    // Emit a products update if applied
+    if (apply) {
+      try {
+        const io = req.app.get('io');
+        if (io) io.emit('products:updated', { bulk: true });
+      } catch {}
+    }
+
+    res.json({ success: true, message: apply ? 'Invoice applied' : 'Invoice parsed', data: { preview, appliedCount } });
+  } catch (error) {
+    console.error('Import invoice error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});

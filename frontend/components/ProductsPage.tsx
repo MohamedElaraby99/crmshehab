@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Product, ProductPurchase, User } from '../types';
-import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, getMyDemands, importProductsFromExcel } from '../services/api';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, getMyDemands, importProductsFromExcel, importInvoiceFromExcel } from '../services/api';
 import { createDemand } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
@@ -25,6 +25,9 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const [imagePreviewTitle, setImagePreviewTitle] = useState<string>('');
   const [importing, setImporting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoicePreview, setInvoicePreview] = useState<Array<{ itemNumber: string; quantity: number; paid: boolean; matched: boolean; name?: string; currentStock?: number; newStock?: number; reason?: string }>>([]);
+  const [invoiceApplying, setInvoiceApplying] = useState(false);
 
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
   const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
@@ -298,6 +301,14 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
               Import Excel
             </button>
           )}
+          {userIsAdmin && (
+            <button
+              onClick={() => setShowInvoiceModal(true)}
+              className="px-3 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 shadow"
+            >
+              Import Invoice
+            </button>
+          )}
           {userIsClient && (
             <button
               onClick={() => setCartOpen(true)}
@@ -554,6 +565,105 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             </div>
             <div className="mt-4 text-right">
               <button onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded border">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Import Modal */}
+      {userIsAdmin && showInvoiceModal && (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white w-full max-w-2xl rounded shadow-lg p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Import Invoice (Excel/CSV)</h3>
+              <button onClick={() => { setShowInvoiceModal(false); setInvoicePreview([]); }} className="text-gray-600 hover:text-gray-800">✕</button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">Upload an invoice file. Expected columns: <span className="font-mono">OEM/Item Number, Quantity, Paid/Status</span>. Only rows marked Paid will reduce stock when you click Apply.</p>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setInvoiceApplying(true);
+                  const res = await importInvoiceFromExcel(file, false);
+                  setInvoiceApplying(false);
+                  if (res?.success) {
+                    setInvoicePreview(res.data?.preview || []);
+                  } else {
+                    alert(res?.message || 'Failed to parse invoice');
+                  }
+                  e.currentTarget.value = '';
+                }}
+                className="w-full border rounded px-3 py-2"
+              />
+              {invoiceApplying && <div className="text-sm text-gray-700">Processing…</div>}
+              {invoicePreview.length > 0 && (
+                <div className="max-h-72 overflow-y-auto border rounded">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Item</th>
+                        <th className="px-3 py-2 text-left">Name</th>
+                        <th className="px-3 py-2 text-right">Qty</th>
+                        <th className="px-3 py-2 text-center">Paid</th>
+                        <th className="px-3 py-2 text-center">Matched</th>
+                        <th className="px-3 py-2 text-right">Current</th>
+                        <th className="px-3 py-2 text-right">New</th>
+                        <th className="px-3 py-2 text-left">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoicePreview.map((r, idx) => (
+                        <tr key={idx} className="border-t">
+                          <td className="px-3 py-1 font-mono">{r.itemNumber}</td>
+                          <td className="px-3 py-1">{r.name || '-'}</td>
+                          <td className="px-3 py-1 text-right">{r.quantity}</td>
+                          <td className="px-3 py-1 text-center">{r.paid ? 'Yes' : 'No'}</td>
+                          <td className="px-3 py-1 text-center">{r.matched ? '✓' : '✗'}</td>
+                          <td className="px-3 py-1 text-right">{typeof r.currentStock === 'number' ? r.currentStock : '-'}</td>
+                          <td className="px-3 py-1 text-right">{typeof r.newStock === 'number' ? r.newStock : '-'}</td>
+                          <td className="px-3 py-1">{r.reason || ''}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="text-xs text-gray-500">We match by OEM/Item Number to product `itemNumber`.</div>
+            </div>
+            <div className="mt-4 text-right">
+              <button onClick={() => { setShowInvoiceModal(false); setInvoicePreview([]); }} className="px-4 py-2 rounded border hover:bg-gray-50 mr-2">Close</button>
+              <button
+                disabled={invoicePreview.length === 0}
+                onClick={async () => {
+                  try {
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = '.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv';
+                    fileInput.onchange = async () => {
+                      const file = fileInput.files?.[0];
+                      if (!file) return;
+                      setInvoiceApplying(true);
+                      const res = await importInvoiceFromExcel(file, true);
+                      setInvoiceApplying(false);
+                      if (res?.success) {
+                        alert(`Applied. Updated rows: ${res.data?.appliedCount || 0}`);
+                        setShowInvoiceModal(false);
+                        setInvoicePreview([]);
+                        await fetchData();
+                      } else {
+                        alert(res?.message || 'Failed to apply invoice');
+                      }
+                    };
+                    fileInput.click();
+                  } catch {}
+                }}
+                className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Apply Paid Rows
+              </button>
             </div>
           </div>
         </div>

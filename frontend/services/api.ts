@@ -506,6 +506,35 @@ export const importProductsFromExcel = async (file: File): Promise<{ success: bo
   }
 };
 
+// Import invoice Excel/CSV and optionally apply stock reductions for Paid rows
+export const importInvoiceFromExcel = async (
+  file: File,
+  apply: boolean
+): Promise<{ success: boolean; data?: { preview: Array<any>; appliedCount: number }; message?: string }> => {
+  try {
+    const token = localStorage.getItem('authToken');
+    const url = `${API_BASE_URL}/products/invoices/import?apply=${apply ? 'true' : 'false'}`;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({ success: false }));
+    if (!response.ok) {
+      return { success: false, message: data?.message || `HTTP ${response.status}` };
+    }
+    return data;
+  } catch (error: any) {
+    console.error('Import invoice failed:', error);
+    return { success: false, message: error?.message || 'Network error' };
+  }
+};
+
 // Order functions
 export const getAllOrders = async (searchParams?: { search?: string; searchType?: string }): Promise<Order[]> => {
   try {
