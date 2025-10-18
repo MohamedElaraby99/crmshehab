@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const Vendor = require('../models/Vendor');
-const { generateToken, authenticateUser, authenticateVendor } = require('../middleware/auth');
+const { generateToken, authenticateUser, authenticateVendor, authenticateUserOrVendor } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -140,7 +140,7 @@ router.post('/vendor-login', [
     }
 
     // Check password
-    const isPasswordValid = await vendor.password === password; // For demo purposes
+    const isPasswordValid = vendor.password === password; // For demo purposes
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
@@ -185,14 +185,29 @@ router.post('/vendor-login', [
   }
 });
 
-// Get current user
-router.get('/me', authenticateUser, async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      user: req.user
-    }
-  });
+// Get current user or vendor
+router.get('/me', authenticateUserOrVendor, async (req, res) => {
+  // Return user if it's a user token, vendor if it's a vendor token
+  if (req.user) {
+    res.json({
+      success: true,
+      data: {
+        user: req.user
+      }
+    });
+  } else if (req.vendor) {
+    res.json({
+      success: true,
+      data: {
+        vendor: req.vendor
+      }
+    });
+  } else {
+    res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
 });
 
 // Get current vendor

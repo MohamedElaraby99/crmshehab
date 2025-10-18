@@ -55,13 +55,12 @@ const getAuthToken = (): string | null => {
 export const isAuthenticated = (): boolean => {
   const token = localStorage.getItem('authToken');
   if (!token) return false;
-  
-  // Check if token is expired
+
+  // Check if token is expired, but don't clear it yet - let the API call handle it
   if (isTokenExpired(token)) {
-    clearAuth();
     return false;
   }
-  
+
   return true;
 };
 
@@ -72,7 +71,8 @@ const isTokenExpired = (token: string) => {
     const now = Math.floor(Date.now() / 1000);
     return payload.exp && now >= payload.exp;
   } catch {
-    return false;
+    // If token can't be parsed, consider it expired/invalid
+    return true;
   }
 };
 
@@ -115,14 +115,6 @@ const apiRequestUnauth = async (endpoint: string, options: RequestInit = {}): Pr
 const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
   const token = getAuthToken();
   
-  // Check if token is expired before making the request
-  if (token && isTokenExpired(token)) {
-    console.warn('Token expired, clearing authentication and redirecting to login');
-    clearAuth();
-    window.location.href = '/';
-    return;
-  }
-  
   const url = `${API_BASE_URL}${endpoint}`;
   
   const config: RequestInit = {
@@ -145,10 +137,12 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<
       
       // Handle 401 Unauthorized - token expired or invalid
       if (response.status === 401) {
-        console.warn('Authentication failed, clearing token and redirecting to login');
+        console.warn('Authentication failed, clearing token');
         clearAuth();
-        // Redirect to login page
-        window.location.href = '/';
+        // Only redirect if we're not already on the login page
+        if (window.location.pathname !== '/') {
+          window.location.href = '/';
+        }
         return;
       }
       
@@ -202,7 +196,7 @@ export const authenticateVendor = async (username: string, password: string) => 
 export const getCurrentUser = async (): Promise<User | null> => {
   try {
     const response = await apiRequest('/auth/me');
-    return response.success ? response.data.user : null;
+    return response.success ? (response.data.user || response.data.vendor) : null;
   } catch (error) {
     console.error('Get current user failed:', error);
     return null;

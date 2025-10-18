@@ -114,6 +114,8 @@ const authenticateUserOrVendor = async (req, res, next) => {
         });
       }
       req.vendor = vendor;
+      req.user = vendor; // Set req.user for backward compatibility
+      req.user.role = 'vendor'; // Set role for backward compatibility
       req.userType = 'vendor';
     }
     else {

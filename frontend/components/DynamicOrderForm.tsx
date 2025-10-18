@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Order, Vendor, Product } from '../types';
 import { ORDER_FIELD_CONFIGS, OrderFieldConfig, getEditableFieldsForRole } from '../data/orderFieldConfig';
+import VendorOrderCreationTable from './VendorOrderCreationTable';
+import { uploadOrderItemImage, createOrder } from '../services/api';
 
 interface DynamicOrderFormProps {
   order?: Order | null;
@@ -35,6 +37,8 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [productFilters, setProductFilters] = useState<Record<string, string>>({});
+  const [tableItems, setTableItems] = useState<OrderItem[]>([]);
+  const [tableTotalAmount, setTableTotalAmount] = useState<number>(0);
 
   // Load field configurations
   useEffect(() => {
@@ -214,48 +218,75 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
 
     // Additionally exclude fields we intentionally hide from admin in UI and order item fields
     const finalFields = userRole === 'admin'
-      ? fieldsToValidate.filter(f => 
-          f.name !== 'price' && 
-          f.name !== 'confirmFormShehab' && 
+      ? fieldsToValidate.filter(f =>
+          f.name !== 'price' &&
+          f.name !== 'confirmFormShehab' &&
           f.name !== 'quantity' &&
           f.name !== 'itemNumber' &&
           f.name !== 'productName'
         )
-      : fieldsToValidate;
+      : fieldsToValidate.filter(f =>
+          // For vendor orders, exclude item-specific fields that come from table items
+          f.name !== 'unitPrice' &&
+          f.name !== 'quantity' &&
+          f.name !== 'itemNumber' &&
+          f.name !== 'productName' &&
+          f.name !== 'totalPrice'
+        );
 
     console.log('DynamicOrderForm: Fields to validate:', finalFields.map(f => f.name));
     
     finalFields.forEach(field => {
       const value = formData[field.name];
-      const error = validateField(field, value);
-      if (error) {
-        console.log(`DynamicOrderForm: Field ${field.name} validation failed:`, error, 'Value:', value);
-        newErrors[field.name] = error;
-        isValid = false;
+
+      // For vendor orders, skip validation for item-specific fields that come from table items
+      if (userRole === 'vendor' && (field.name === 'unitPrice' || field.name === 'quantity' || field.name === 'itemNumber' || field.name === 'productName' || field.name === 'totalPrice')) {
+        console.log(`DynamicOrderForm: Skipping validation for vendor item field: ${field.name}`);
+        return;
+      }
+
+      // Only validate if the field has a value or is required
+      if (value !== undefined && value !== '' && value !== null) {
+        const error = validateField(field, value);
+        if (error) {
+          console.log(`DynamicOrderForm: Field ${field.name} validation failed:`, error, 'Value:', value);
+          newErrors[field.name] = error;
+          isValid = false;
+        }
+      } else if (field.required) {
+        // For required fields, validate even if empty
+        const error = validateField(field, value);
+        if (error) {
+          console.log(`DynamicOrderForm: Required field ${field.name} validation failed:`, error, 'Value:', value);
+          newErrors[field.name] = error;
+          isValid = false;
+        }
       }
     });
 
-    // Validate order items
-    orderItems.forEach((item, index) => {
+    // Validate order items - use tableItems for vendor orders, orderItems for admin orders
+    const itemsToValidate = userRole === 'vendor' ? tableItems : orderItems;
+
+    itemsToValidate.forEach((item, index) => {
       console.log(`Validating item ${index}:`, item);
-      
+
       // Skip validation if item number is 'custom' (this means user is still in custom mode but hasn't entered value yet)
       if (item.itemNumber === 'custom') {
         newErrors[`item_${index}_itemNumber`] = 'Please enter a custom item number';
         isValid = false;
         return; // Skip other validations for this item
       }
-      
+
       if (!item.itemNumber || !item.itemNumber.trim()) {
         newErrors[`item_${index}_itemNumber`] = 'Please select a product or enter a custom item number';
         isValid = false;
       }
-      
+
       if (!item.productName || !item.productName.trim()) {
         newErrors[`item_${index}_productName`] = 'Please enter a product name';
         isValid = false;
       }
-      
+
       if (!item.quantity || item.quantity <= 0) {
         newErrors[`item_${index}_quantity`] = 'Quantity must be greater than 0';
         isValid = false;
@@ -284,19 +315,24 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleTableChange = (items: OrderItem[], totalAmount: number) => {
+    setTableItems(items);
+    setTableTotalAmount(totalAmount);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     console.log('DynamicOrderForm: Submit button clicked');
     e.preventDefault();
-    
+
     console.log('DynamicOrderForm: Current formData:', formData);
-    console.log('DynamicOrderForm: Current orderItems:', orderItems);
+    console.log('DynamicOrderForm: Current tableItems:', tableItems);
     console.log('DynamicOrderForm: Current errors:', errors);
-    
+
     if (!validateForm()) {
       console.log('DynamicOrderForm: Form validation failed');
       return;
     }
-    
+
     console.log('DynamicOrderForm: Form validation passed, proceeding with submission');
 
     // Prepare order data based on user role
@@ -314,7 +350,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         // Try to find existing product by item number
         const existingProduct = products.find(p => p.itemNumber === item.itemNumber);
         const productId = existingProduct ? ((existingProduct as any).id || (existingProduct as any)._id) : null;
-        
+
         return {
           productId: productId || item.itemNumber, // Fallback to itemNumber if product not found
           itemNumber: item.itemNumber,
@@ -343,28 +379,99 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
 
       console.log('DynamicOrderForm: Sending order data to backend', orderData);
     } else {
-      // Vendor updates only their fields
-      const items = orderItems.map(item => {
+      // Vendor creates order using table data
+      console.log('DynamicOrderForm: Processing vendor order creation');
+      console.log('DynamicOrderForm: tableItems:', tableItems);
+      console.log('DynamicOrderForm: tableTotalAmount:', tableTotalAmount);
+
+      if (tableItems.length === 0 || tableItems.every(item => !item.itemNumber.trim())) {
+        console.log('DynamicOrderForm: Validation failed - no valid items');
+        setErrors(prev => ({ ...prev, items: 'Please add at least one item to the order' }));
+        return;
+      }
+
+      const items = tableItems.map(item => {
         const unitPrice = item.unitPrice || 0;
         const totalPrice = item.quantity * unitPrice;
-        
-        return {
-          productId: item.itemNumber, // Use itemNumber as fallback
+
+        // For vendor orders, we need to handle cases where the product might not exist yet
+        // Try to find the actual product by itemNumber to get the proper productId
+        const existingProduct = products.find(p => p.itemNumber === item.itemNumber);
+        let productId;
+
+        if (existingProduct) {
+          productId = (existingProduct as any).id || (existingProduct as any)._id;
+        } else {
+          // For new products, we'll use the itemNumber as a temporary identifier
+          // The backend should handle this case and create the product if needed
+          productId = item.itemNumber;
+        }
+
+        console.log('DynamicOrderForm: Processing item:', {
           itemNumber: item.itemNumber,
+          productName: item.productName,
+          quantity: item.quantity,
+          unitPrice: unitPrice,
+          totalPrice: totalPrice,
+          existingProduct: existingProduct ? 'found' : 'not found',
+          productId: productId
+        });
+
+        return {
+          productId: productId, // Use actual product ID if found, otherwise use itemNumber as temporary ID
+          itemNumber: item.itemNumber,
+          productName: item.productName,
           quantity: item.quantity,
           unitPrice: unitPrice,
           totalPrice: totalPrice
         };
       });
 
-      const totalAmount = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-
       orderData = {
         id: order?.id,
         items: items,
-        totalAmount: totalAmount,
+        totalAmount: tableTotalAmount,
         ...formData
       };
+
+      console.log('DynamicOrderForm: Final vendor orderData:', orderData);
+    }
+
+    // For vendor orders, create the order directly and handle image uploads
+    if (userRole === 'vendor') {
+      console.log('DynamicOrderForm: Creating vendor order...');
+      try {
+        const createdOrder = await createOrder(orderData);
+        if (createdOrder && createdOrder.id && tableItems.some(item => item.imageFile)) {
+          console.log('DynamicOrderForm: Uploading item images...');
+
+          // Upload images for each item that has one
+          for (let i = 0; i < tableItems.length; i++) {
+            const item = tableItems[i];
+            if (item.imageFile) {
+              try {
+                const uploadResult = await uploadOrderItemImage(createdOrder.id, i, item.imageFile);
+                if (uploadResult.success) {
+                  console.log(`DynamicOrderForm: Successfully uploaded image for item ${i}`);
+                } else {
+                  console.error(`DynamicOrderForm: Failed to upload image for item ${i}:`, uploadResult.message);
+                }
+              } catch (error) {
+                console.error(`DynamicOrderForm: Error uploading image for item ${i}:`, error);
+              }
+            }
+          }
+        }
+
+        // Call onSave to refresh the dashboard
+        onSave(orderData);
+      } catch (error) {
+        console.error('DynamicOrderForm: Failed to create vendor order:', error);
+        return;
+      }
+    } else {
+      // For admin orders, use the regular flow
+      onSave(orderData);
     }
 
     // Ensure we have an ID for updates
@@ -676,16 +783,39 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
             )}
 
             {/* Vendor Fields */}
-            {/* <div className="bg-green-50 p-4 rounded-lg">
-              <h4 className="text-sm font-medium text-green-900 mb-3">
-                {userRole === 'admin' ? 'Vendor Fields (Vendor Will Fill)' : 'Your Fields (You Can Edit)'}
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {visibleFields
-                  .filter(field => field.editableBy === 'vendor')
-                  .map(field => renderField(field))}
+            {userRole === 'vendor' && !order && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-green-900 mb-3">Order Items (You Can Edit)</h4>
+                <VendorOrderCreationTable
+                  products={products}
+                  onOrderChange={handleTableChange}
+                />
               </div>
-            </div> */}
+            )}
+
+            {userRole === 'vendor' && order && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-green-900 mb-3">Your Fields (You Can Edit)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {visibleFields
+                    .filter(field => field.editableBy === 'vendor')
+                    .map(field => renderField(field))}
+                </div>
+              </div>
+            )}
+
+            {userRole === 'admin' && (
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h4 className="text-sm font-medium text-green-900 mb-3">
+                  Vendor Fields (Vendor Will Fill)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {visibleFields
+                    .filter(field => field.editableBy === 'vendor')
+                    .map(field => renderField(field))}
+                </div>
+              </div>
+            )}
 
             {/* Shared Fields */}
             {visibleFields.some(field => field.editableBy === 'both') && (
@@ -710,9 +840,6 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
               </button>
               <button
                 type="submit"
-                onClick={(e) => {
-                  console.log('DynamicOrderForm: Submit button clicked directly');
-                }}
                 className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 {order ? 'Update Order' : 'Create Order'}

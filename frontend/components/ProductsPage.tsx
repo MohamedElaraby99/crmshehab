@@ -33,6 +33,8 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
 
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
   const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
+  const userIsVendor = useMemo(() => (currentUser?.role === 'vendor'), [currentUser]);
+
 
   // Consistent price formatting based on role
   const formatPriceForUser = (value: number) => {
@@ -156,6 +158,9 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
       (allProducts || []).forEach((p: any) => {
         if (Array.isArray(p.images) && p.images.length > 0) {
           imgMap[p.id] = p.images[0];
+          console.log('Product image found:', p.id, p.images[0]);
+        } else {
+          console.log('Product has no images:', p.id, p.name);
         }
       });
       // Fallback from recent order item images if product lacks an image
@@ -167,9 +172,11 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
           // Prefer the first image encountered (orders are generally fetched newest first)
           if (pid && itemImg && !imgMap[pid]) {
             imgMap[pid] = itemImg;
+            console.log('Order item image found:', pid, itemImg);
           }
         });
       });
+      console.log('Product image map:', imgMap);
       setProductImageMap(imgMap);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -287,7 +294,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
           <p className="text-sm text-gray-500">Discover our catalog and send demands easily</p>
         </div>
         <div className="flex items-center space-x-2">
-          {userIsAdmin && (
+          {currentUser && !userIsClient && (
             <button
               onClick={() => setShowModal(true)}
               className="px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow"
@@ -387,13 +394,24 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                       <div className="flex items-center space-x-3">
                         <div className="h-12 w-12">
                           {productImageMap[product.id] ? (
-                            <img
-                              src={`${getApiOrigin().replace(/\/api\/?$/, '')}${productImageMap[product.id]}`}
-                              alt={product.name}
-                              className="h-12 w-12 rounded-lg object-cover border cursor-pointer"
-                              title="Click to view photo"
-                              onClick={() => openImagePreview(product)}
-                            />
+                            <>
+                              <img
+                                src={`${getApiOrigin().replace(/\/api\/?$/, '')}${productImageMap[product.id]}`}
+                                alt={product.name}
+                                className="h-12 w-12 rounded-lg object-cover border cursor-pointer"
+                                title="Click to view photo"
+                                onClick={() => openImagePreview(product)}
+                                onError={(e) => {
+                                  console.error('Failed to load image for product', product.id, productImageMap[product.id]);
+                                  e.currentTarget.style.display = 'none';
+                                  e.currentTarget.nextElementSibling!.classList.remove('hidden');
+                                }}
+                                onLoad={() => console.log('Image loaded successfully for product', product.id)}
+                              />
+                              <div className="h-12 w-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center hidden">
+                                <span className="text-2xl">📦</span>
+                              </div>
+                            </>
                           ) : (
                             <div className="h-12 w-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
                               <span className="text-2xl">📦</span>
@@ -453,7 +471,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                           </span>
                         </button>
                       )}
-                      {userIsAdmin ? (
+                      {currentUser && !userIsClient ? (
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                           <button
                             onClick={() => toggleVisibility(product)}
@@ -480,16 +498,18 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                             </svg>
                             Edit
                           </button>
-                          <button
-                            onClick={() => handleDeleteProduct(product.id)}
-                            className="inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-700 hover:text-red-900 ring-1 ring-red-200 hover:bg-red-50"
-                            title="Delete Product"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />
-                            </svg>
-                            Delete
-                          </button>
+                          {userIsAdmin && (
+                            <button
+                              onClick={() => handleDeleteProduct(product.id)}
+                              className="inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-700 hover:text-red-900 ring-1 ring-red-200 hover:bg-red-50"
+                              title="Delete Product"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />
+                              </svg>
+                              Delete
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -521,7 +541,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
       </div>
 
       {/* Product Modal */}
-      {userIsAdmin && showModal && (
+      {currentUser && !userIsClient && showModal && (
         <ProductModal
           product={editingProduct}
           onSave={editingProduct ? handleUpdateProduct : handleCreateProduct}
@@ -529,6 +549,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             setShowModal(false);
             setEditingProduct(null);
           }}
+          userRole={userIsAdmin ? 'admin' : 'vendor'}
         />
       )}
 
@@ -796,21 +817,24 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
 };
 
 // Product Modal Component
-interface ProductModalProps {
+export interface ProductModalProps {
   product: Product | null;
   onSave: (product: any) => void;
   onClose: () => void;
+  userRole?: 'admin' | 'vendor';
 }
 
-const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose }) => {
+const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose, userRole = 'admin' }) => {
   const [formData, setFormData] = useState({
     itemNumber: product?.itemNumber || '',
     name: product?.name || '',
     description: product?.description || '',
-    sellingPrice: (product as any)?.sellingPrice as number | undefined ?? undefined,
-    stock: (product as any)?.stock as number | undefined ?? undefined,
-    reorderLevel: (product as any)?.reorderLevel as number | undefined ?? 0,
-    visibleToClients: (product as any)?.visibleToClients as boolean | undefined ?? true,
+    ...(userRole === 'admin' && {
+      sellingPrice: (product as any)?.sellingPrice as number | undefined ?? undefined,
+      stock: (product as any)?.stock as number | undefined ?? undefined,
+      reorderLevel: (product as any)?.reorderLevel as number | undefined ?? 0,
+      visibleToClients: (product as any)?.visibleToClients as boolean | undefined ?? true,
+    }),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -819,22 +843,26 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
       itemNumber: formData.itemNumber,
       name: formData.name,
     };
-    
+
     // Only include description if it's not empty
     if (formData.description && formData.description.trim()) {
       productData.description = formData.description;
     }
-    
-    if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
-      productData.sellingPrice = formData.sellingPrice;
+
+    // Admin-only fields
+    if (userRole === 'admin') {
+      if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
+        productData.sellingPrice = formData.sellingPrice;
+      }
+      if (typeof formData.stock === 'number' && !Number.isNaN(formData.stock)) {
+        productData.stock = formData.stock;
+      }
+      if (typeof formData.reorderLevel === 'number' && !Number.isNaN(formData.reorderLevel)) {
+        productData.reorderLevel = formData.reorderLevel;
+      }
+      productData.visibleToClients = !!formData.visibleToClients;
     }
-    if (typeof formData.stock === 'number' && !Number.isNaN(formData.stock)) {
-      productData.stock = formData.stock;
-    }
-    if (typeof formData.reorderLevel === 'number' && !Number.isNaN(formData.reorderLevel)) {
-      productData.reorderLevel = formData.reorderLevel;
-    }
-    productData.visibleToClients = !!formData.visibleToClients;
+
     if (product) {
       productData.id = product.id;
     }
@@ -929,53 +957,57 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
                 onChange={handleChange}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Selling Price</label>
-              <input
-                name="sellingPrice"
-                type="number"
-                step="0.01"
-                min="0"
-                className="mt-1 block w-full border rounded px-3 py-2"
-                value={typeof formData.sellingPrice === 'number' ? String(formData.sellingPrice) : ''}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Stock</label>
-              <input
-                name="stock"
-                type="number"
-                step="1"
-                min="0"
-                className="mt-1 block w-full border rounded px-3 py-2"
-                value={typeof formData.stock === 'number' ? String(formData.stock) : ''}
-                onChange={handleChange}
-              />
-            </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Reorder Level</label>
-        <input
-          name="reorderLevel"
-          type="number"
-          step="1"
-          min="0"
-          className="mt-1 block w-full border rounded px-3 py-2"
-          value={typeof formData.reorderLevel === 'number' ? String(formData.reorderLevel) : ''}
-          onChange={handleChange}
-        />
-      </div>
-      <div className="flex items-center space-x-2">
-        <input
-          id="visibleToClients"
-          name="visibleToClients"
-          type="checkbox"
-          checked={!!formData.visibleToClients}
-          onChange={handleChange}
-          className="h-4 w-4"
-        />
-        <label htmlFor="visibleToClients" className="text-sm font-medium text-gray-700">Visible to Clients</label>
-      </div>
+            {userRole === 'admin' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Selling Price</label>
+                  <input
+                    name="sellingPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="mt-1 block w-full border rounded px-3 py-2"
+                    value={typeof formData.sellingPrice === 'number' ? String(formData.sellingPrice) : ''}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Stock</label>
+                  <input
+                    name="stock"
+                    type="number"
+                    step="1"
+                    min="0"
+                    className="mt-1 block w-full border rounded px-3 py-2"
+                    value={typeof formData.stock === 'number' ? String(formData.stock) : ''}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Reorder Level</label>
+                  <input
+                    name="reorderLevel"
+                    type="number"
+                    step="1"
+                    min="0"
+                    className="mt-1 block w-full border rounded px-3 py-2"
+                    value={typeof formData.reorderLevel === 'number' ? String(formData.reorderLevel) : ''}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    id="visibleToClients"
+                    name="visibleToClients"
+                    type="checkbox"
+                    checked={!!formData.visibleToClients}
+                    onChange={handleChange}
+                    className="h-4 w-4"
+                  />
+                  <label htmlFor="visibleToClients" className="text-sm font-medium text-gray-700">Visible to Clients</label>
+                </div>
+              </>
+            )}
             <div className="flex items-center justify-end space-x-2 pt-2">
               <button
                 type="button"
@@ -1000,4 +1032,5 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose })
   );
 };
 
+export { ProductModal };
 export default ProductsPage;

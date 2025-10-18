@@ -39,30 +39,43 @@ const App: React.FC = () => {
       const storedUser = sessionStorage.getItem('currentUser');
       const storedVendor = sessionStorage.getItem('currentVendor');
       
-      if (storedUser) {
+      if (storedUser || storedVendor) {
         try {
-          // Validate token by fetching current user
-          const user = await getCurrentUser();
-          if (user) {
-            setCurrentUser(user);
-            sessionStorage.setItem('currentUser', JSON.stringify(user));
+          // Validate token by fetching current authenticated entity (user or vendor)
+          const response = await fetch(`${import.meta.env?.VITE_API_BASE_URL || 'http://localhost:4031'}/api/auth/me`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              const entity = data.data.user || data.data.vendor;
+              if (entity) {
+                // Check if it's a vendor object (has name, contactPerson, etc.) or user object (has role)
+                if (entity.name && entity.contactPerson) {
+                  // It's a vendor
+                  setCurrentVendor(entity);
+                  sessionStorage.setItem('currentVendor', JSON.stringify(entity));
+                  sessionStorage.removeItem('currentUser'); // Clear user storage
+                } else if (entity.role) {
+                  // It's a user
+                  setCurrentUser(entity);
+                  sessionStorage.setItem('currentUser', JSON.stringify(entity));
+                  sessionStorage.removeItem('currentVendor'); // Clear vendor storage
+                } else {
+                  // Unknown type, logout
+                  handleLogout();
+                }
+              } else {
+                handleLogout();
+              }
+            } else {
+              handleLogout();
+            }
           } else {
-            // Token is invalid, clear everything
-            handleLogout();
-          }
-        } catch (error) {
-          // Token is invalid, clear everything
-          handleLogout();
-        }
-      } else if (storedVendor) {
-        try {
-          // Validate token by fetching current vendor
-          const vendor = await getCurrentVendor();
-          if (vendor) {
-            setCurrentVendor(vendor);
-            sessionStorage.setItem('currentVendor', JSON.stringify(vendor));
-          } else {
-            // Token is invalid, clear everything
             handleLogout();
           }
         } catch (error) {

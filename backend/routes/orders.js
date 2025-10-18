@@ -306,7 +306,18 @@ router.post('/', [
   authenticateUserOrVendor,
   body('vendorId').isMongoId().withMessage('Valid vendor ID is required'),
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
-  body('items.*.productId').isMongoId().withMessage('Valid product ID is required'),
+  body('items.*.productId').custom((value) => {
+    // Allow either valid MongoDB ObjectId or non-empty string (for itemNumber)
+    if (!value || value === '') {
+      throw new Error('Product ID is required');
+    }
+    // Check if it's a valid ObjectId format or a non-empty string
+    const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(value);
+    if (!isValidObjectId && typeof value !== 'string') {
+      throw new Error('Product ID must be a valid ObjectId or item number string');
+    }
+    return true;
+  }),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
   body('items.*.unitPrice').optional().isNumeric().withMessage('Unit price must be a number'),
   body('items.*.totalPrice').optional().isNumeric().withMessage('Total price must be a number'),
@@ -343,16 +354,41 @@ router.post('/', [
     const processedItems = [];
 
     for (const item of items) {
-      const product = await Product.findById(item.productId);
+      let product;
+
+      // Check if productId is a valid MongoDB ObjectId or if it's an itemNumber (string)
+      const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(item.productId);
+
+      if (isValidObjectId) {
+        // Try to find by ObjectId first
+        product = await Product.findById(item.productId);
+      }
+
+      if (!product) {
+        // If not found by ObjectId, try to find by itemNumber
+        product = await Product.findOne({ itemNumber: item.productId, isActive: true });
+      }
+
+      if (!product) {
+        // If product still not found, create a new product with the itemNumber
+        console.log(`Creating new product for itemNumber: ${item.productId}`);
+        product = await Product.create({
+          name: item.productName || item.itemNumber,
+          itemNumber: item.productId,
+          description: `Auto-created product for item ${item.productId}`,
+          isActive: true
+        });
+      }
+
       if (!product || !product.isActive) {
         return res.status(400).json({
           success: false,
-          message: `Product ${item.productId} not found`
+          message: `Product ${item.productId} not found or inactive`
         });
       }
 
       processedItems.push({
-        productId: item.productId,
+        productId: product._id,
         itemNumber: product.itemNumber,
         quantity: item.quantity,
         unitPrice: item.unitPrice || undefined,

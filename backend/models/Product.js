@@ -54,6 +54,11 @@ const productSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  vendorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Vendor',
+    required: false // Allow admin-created products without vendorId
+  },
   createdAt: {
     type: Date,
     default: Date.now

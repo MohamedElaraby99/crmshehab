@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Vendor, Order } from '../types';
-import { getVendorById, getOrdersByVendorId, updateOrder as apiUpdateOrder, getAllOrders, updateVendorByVendor, vendorHeartbeat, vendorOffline, vendorOrdersLastRead } from '../services/api';
+import { Vendor, Order, Product } from '../types';
+import { getVendorById, getOrdersByVendorId, updateOrder as apiUpdateOrder, getAllOrders, updateVendorByVendor, vendorHeartbeat, vendorOffline, vendorOrdersLastRead, getAllProducts, createProduct, updateProduct, deleteProduct, createOrder, getApiOrigin } from '../services/api';
 import OrderTable from './OrderTable';
 import ProductHistoryModal from './ProductHistoryModal';
 import DynamicOrderForm from './DynamicOrderForm';
+import { ProductModal, ProductModalProps } from './ProductsPage';
 
 interface VendorDashboardProps {
   user: Vendor;
@@ -15,9 +16,15 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'orders' | 'products'>('orders');
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productImageMap, setProductImageMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetchDashboardData();
@@ -35,15 +42,43 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [vendorData, vendorOrders, allOrdersData] = await Promise.all([
+      const [vendorData, vendorOrders, allOrdersData, allProducts] = await Promise.all([
         getVendorById(user.id),
         getOrdersByVendorId(user.id),
-        getAllOrders()
+        getAllOrders(),
+        getAllProducts()
       ]);
       setVendor(vendorData || user);
       setOrders(vendorOrders);
       setAllOrders(allOrdersData);
-      
+      setProducts(allProducts);
+
+      // Build product image map
+      const imgMap: Record<string, string> = {};
+      (allProducts || []).forEach((p: any) => {
+        if (Array.isArray(p.images) && p.images.length > 0) {
+          imgMap[p.id] = p.images[0];
+          console.log('Vendor Dashboard - Product image found:', p.id, p.images[0]);
+        } else {
+          console.log('Vendor Dashboard - Product has no images:', p.id, p.name);
+        }
+      });
+      // Fallback from recent order item images if product lacks an image
+      ;(allOrdersData || []).forEach((order: any) => {
+        if (!order?.items) return;
+        order.items.forEach((it: any) => {
+          const pid = it?.productId?.id || it?.productId;
+          const itemImg = it?.itemImageUrl || it?.imagePath;
+          // Prefer the first image encountered (orders are generally fetched newest first)
+          if (pid && itemImg && !imgMap[pid]) {
+            imgMap[pid] = itemImg;
+            console.log('Vendor Dashboard - Order item image found:', pid, itemImg);
+          }
+        });
+      });
+      console.log('Vendor Dashboard - Product image map:', imgMap);
+      setProductImageMap(imgMap);
+
       // Debug logging
       console.log('Vendor Dashboard - Orders received:', vendorOrders);
       console.log('First order image data:', vendorOrders[0]?.itemImageUrl, vendorOrders[0]?.imagePath);
@@ -157,6 +192,65 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
     }
   };
 
+
+  const handleCreateOrder = async (orderData: any) => {
+    try {
+      console.log('VendorDashboard: Creating order:', orderData);
+
+      // For vendor-created orders, ensure vendorId is set to current vendor
+      if (user && user.id) {
+        orderData.vendorId = user.id;
+        console.log('VendorDashboard: Set vendorId to:', user.id);
+      }
+
+      console.log('VendorDashboard: Calling createOrder API...');
+      const created = await createOrder(orderData);
+      console.log('VendorDashboard: createOrder result:', created);
+
+      if (created) {
+        console.log('VendorDashboard: Order created successfully, refreshing data...');
+        await fetchDashboardData();
+        setShowOrderModal(false);
+      } else {
+        console.error('VendorDashboard: Order creation failed - no data returned');
+      }
+    } catch (error) {
+      console.error('VendorDashboard: Failed to create order:', error);
+    }
+  };
+
+  const handleCreateProduct = async (productData: any) => {
+    try {
+      console.log('VendorDashboard: Creating product:', productData);
+      const created = await createProduct(productData);
+      if (created) {
+        await fetchDashboardData();
+        setShowProductModal(false);
+      }
+    } catch (error) {
+      console.error('Failed to create product:', error);
+    }
+  };
+
+  const handleUpdateProduct = async (productData: Product) => {
+    try {
+      console.log('VendorDashboard: Updating product:', productData);
+      const updated = await updateProduct(productData.id, productData);
+      if (updated) {
+        await fetchDashboardData();
+        setShowProductModal(false);
+        setEditingProduct(null);
+      }
+    } catch (error) {
+      console.error('Failed to update product:', error);
+    }
+  };
+
+  const handleEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setShowProductModal(true);
+  };
+
   if (loading) {
     return <div className="p-8 text-center">Loading...</div>;
   }
@@ -168,27 +262,153 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
           <h1 className="text-3xl font-bold text-gray-900">
             Welcome, {vendor?.name}
           </h1>
-          <p className="mt-2 text-gray-600">Manage your orders</p>
+          <p className="mt-2 text-gray-600">Manage your orders and products</p>
         </div>
 
-      
-
-        {/* Orders Section */}
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Related Orders</h3>
+        {/* Tabs */}
+        <div className="mb-6">
+          <div className="sm:hidden">
+            <label htmlFor="tabs" className="sr-only">Select a tab</label>
+            <select
+              id="tabs"
+              name="tabs"
+              className="block w-full focus:ring-blue-500 focus:border-blue-500 border-gray-300 rounded-md"
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as 'orders' | 'products')}
+            >
+              <option value="orders">Orders</option>
+              <option value="products">Products</option>
+            </select>
+          </div>
+          <div className="hidden sm:block">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                <button
+                  onClick={() => setActiveTab('orders')}
+                  className={`${
+                    activeTab === 'orders'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
+                >
+                  Orders ({orders.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('products')}
+                  className={`${
+                    activeTab === 'products'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
+                >
+                  Products ({products.length})
+                </button>
+              </nav>
             </div>
-            <OrderTable 
-              orders={orders} 
-              onUpdateOrder={handleUpdateOrder}
-              onDeleteOrder={handleDeleteOrder}
-              onViewHistory={handleViewHistory}
-              userIsAdmin={false}
-              currencySymbol={"¥"}
-            />
           </div>
         </div>
+
+        {/* Orders Section */}
+        {activeTab === 'orders' && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Related Orders</h3>
+                <button
+                  onClick={() => setShowOrderModal(true)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                >
+                  Add Order
+                </button>
+              </div>
+              <OrderTable
+                orders={orders}
+                onUpdateOrder={handleUpdateOrder}
+                onDeleteOrder={handleDeleteOrder}
+                onViewHistory={handleViewHistory}
+                userIsAdmin={false}
+                currencySymbol={"¥"}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Products Section */}
+        {activeTab === 'products' && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Products</h3>
+                <button
+                  onClick={() => setShowProductModal(true)}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
+                >
+                  Add Product
+                </button>
+              </div>
+
+              {products.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">📦</div>
+                  <div className="font-medium text-gray-700">No products found</div>
+                  <div className="text-sm">Click "Add Product" to create your first product.</div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {products.map((product) => (
+                    <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow bg-white">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center space-x-3">
+                          <div className="h-12 w-12">
+                            {productImageMap[product.id] ? (
+                              <>
+                                <img
+                                  src={`${getApiOrigin().replace(/\/api\/?$/, '')}${productImageMap[product.id]}`}
+                                  alt={product.name}
+                                  className="h-12 w-12 rounded-lg object-cover border"
+                                  onError={(e) => {
+                                    console.error('Failed to load image for product', product.id, productImageMap[product.id]);
+                                    e.currentTarget.style.display = 'none';
+                                    e.currentTarget.nextElementSibling!.classList.remove('hidden');
+                                  }}
+                                  onLoad={() => console.log('Image loaded successfully for product', product.id)}
+                                />
+                                <div className="h-12 w-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center hidden">
+                                  <span className="text-2xl">📦</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="h-12 w-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
+                                <span className="text-2xl">📦</span>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-lg font-semibold text-gray-900">{product.name}</h4>
+                            <p className="text-sm text-gray-500 font-mono">{product.itemNumber}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleEditProduct(product)}
+                          className="text-blue-600 hover:text-blue-800 text-sm"
+                          title="Edit Product"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <p className="text-sm text-gray-500 mb-4 line-clamp-2 break-words">{product.description}</p>
+
+
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Product History Modal */}
@@ -234,6 +454,62 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
           onSave={handleUpdateVendor}
           onClose={() => setShowEditModal(false)}
         />
+      )}
+
+
+      {/* Order Modal */}
+      {showOrderModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Create New Order</h3>
+              <button
+                onClick={() => setShowOrderModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <DynamicOrderForm
+              vendors={[]} // Vendors not needed for vendor creating their own orders
+              products={products}
+              userRole="vendor"
+              onSave={handleCreateOrder}
+              onClose={() => setShowOrderModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Product Modal */}
+      {showProductModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">
+                {editingProduct ? 'Edit Product' : 'Add New Product'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowProductModal(false);
+                  setEditingProduct(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <ProductModal
+              product={editingProduct}
+              onSave={editingProduct ? handleUpdateProduct : handleCreateProduct}
+              onClose={() => {
+                setShowProductModal(false);
+                setEditingProduct(null);
+              }}
+              userRole="vendor"
+            />
+          </div>
+        </div>
       )}
     </div>
   );

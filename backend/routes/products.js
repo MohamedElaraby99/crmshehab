@@ -7,7 +7,7 @@ const Product = require('../models/Product');
 const Vendor = require('../models/Vendor');
 const ProductPurchase = require('../models/ProductPurchase');
 const Order = require('../models/Order');
-const { authenticateUser, requireAdmin } = require('../middleware/auth');
+const { authenticateUser, requireAdmin, authenticateUserOrVendor } = require('../middleware/auth');
 const fs = require('fs');
 const os = require('os');
 // Use built-in fetch on Node >=18, fallback to dynamic import
@@ -91,7 +91,7 @@ const normalizeProduct = (doc) => {
 };
 
 // Get all products
-router.get('/', authenticateUser, async (req, res) => {
+router.get('/', authenticateUserOrVendor, async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -103,12 +103,12 @@ router.get('/', authenticateUser, async (req, res) => {
 
     const query = { isActive: true };
 
-    // Hide products from any non-admin users if not visibleToClients
-    try {
-      if (!req.user || req.user.role !== 'admin') {
-        query.visibleToClients = true;
-      }
-    } catch {}
+    // Hide products from clients if not visibleToClients
+    // Admins and vendors can see all products
+    if (req.userType === 'client' || (req.user && req.user.role === 'client')) {
+      query.visibleToClients = true;
+    }
+    // Note: Vendors (req.vendor exists) can see all products without the visibleToClients filter
 
     if (search) {
       query.$or = [
@@ -121,8 +121,15 @@ router.get('/', authenticateUser, async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+    // Build select fields based on user type
+    let selectFields = 'itemNumber name description images specifications isActive createdAt updatedAt reorderLevel visibleToClients';
+    if (req.userType !== 'vendor' && req.user?.role !== 'vendor') {
+      // Non-vendor users can see stock and selling price
+      selectFields += ' sellingPrice stock';
+    }
+
     const products = await Product.find(query)
-      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock reorderLevel visibleToClients')
+      .select(selectFields)
       .sort(sortOptions)
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -131,9 +138,10 @@ router.get('/', authenticateUser, async (req, res) => {
     const total = await Product.countDocuments(query);
 
     // Normalize and backfill stock only if stock is not set (do not override 0)
+    // For vendors, don't include stock information
     const normalized = await Promise.all(products.map(async (p) => {
       const obj = normalizeProduct(p);
-      if (obj.stock === undefined || obj.stock === null) {
+      if ((req.userType !== 'vendor' && req.user?.role !== 'vendor') && (obj.stock === undefined || obj.stock === null)) {
         obj.stock = await computeStockFromConfirmed(obj.id);
       }
       return obj;
@@ -159,17 +167,24 @@ router.get('/', authenticateUser, async (req, res) => {
 });
 
 // Public/Client-visible products (separate endpoint)
-router.get('/visible/list', authenticateUser, async (req, res) => {
+router.get('/visible/list', authenticateUserOrVendor, async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search, 
+    const {
+      page = 1,
+      limit = 10,
+      search,
       sortBy = 'createdAt',
       sortOrder = 'desc'
     } = req.query;
 
-    const query = { isActive: true, visibleToClients: true };
+    let query = { isActive: true };
+
+    // For clients, only show products visible to clients
+    // Admins and vendors can see all products (since they need to create orders)
+    if (req.userType === 'client' || (req.user && req.user.role === 'client')) {
+      query.visibleToClients = true;
+    }
+    // Note: Vendors (req.vendor) can see all products without the visibleToClients filter
 
     if (search) {
       query.$or = [
@@ -182,8 +197,15 @@ router.get('/visible/list', authenticateUser, async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+    // Build select fields based on user type
+    let selectFields = 'itemNumber name description images specifications isActive createdAt updatedAt reorderLevel visibleToClients';
+    if (req.userType !== 'vendor' && req.user?.role !== 'vendor') {
+      // Non-vendor users can see stock and selling price
+      selectFields += ' sellingPrice stock';
+    }
+
     const products = await Product.find(query)
-      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock reorderLevel visibleToClients')
+      .select(selectFields)
       .sort(sortOptions)
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -192,9 +214,10 @@ router.get('/visible/list', authenticateUser, async (req, res) => {
     const total = await Product.countDocuments(query);
 
     // Normalize and backfill stock only if stock is not set (match admin behavior)
+    // For vendors, don't include stock information
     const normalized = await Promise.all(products.map(async (p) => {
       const obj = normalizeProduct(p);
-      if (obj.stock === undefined || obj.stock === null) {
+      if ((req.userType !== 'vendor' && req.user?.role !== 'vendor') && (obj.stock === undefined || obj.stock === null)) {
         obj.stock = await computeStockFromConfirmed(obj.id);
       }
       return obj;
@@ -240,8 +263,15 @@ router.get('/visible', authenticateUser, async (req, res) => {
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
 
+    // Build select fields based on user type
+    let selectFields = 'itemNumber name description images specifications isActive createdAt updatedAt reorderLevel visibleToClients';
+    if (req.userType !== 'vendor' && req.user?.role !== 'vendor') {
+      // Non-vendor users can see stock and selling price
+      selectFields += ' sellingPrice stock';
+    }
+
     const products = await Product.find(query)
-      .select('itemNumber name description images specifications isActive createdAt updatedAt sellingPrice stock reorderLevel visibleToClients')
+      .select(selectFields)
       .sort(sortOptions)
       .limit(limit * 1)
       .skip((page - 1) * limit)
@@ -250,9 +280,10 @@ router.get('/visible', authenticateUser, async (req, res) => {
     const total = await Product.countDocuments(query);
 
     // Normalize and backfill stock only if stock is not set (match admin behavior)
+    // For vendors, don't include stock information
     const normalized = await Promise.all(products.map(async (p) => {
       const obj = normalizeProduct(p);
-      if (obj.stock === undefined || obj.stock === null) {
+      if ((req.userType !== 'vendor' && req.user?.role !== 'vendor') && (obj.stock === undefined || obj.stock === null)) {
         obj.stock = await computeStockFromConfirmed(obj.id);
       }
       return obj;
@@ -398,8 +429,7 @@ router.get('/:id/purchases', authenticateUser, async (req, res) => {
 
 // Create product
 router.post('/', [
-  authenticateUser,
-  requireAdmin,
+  authenticateUserOrVendor,
   body('itemNumber').trim().isLength({ min: 1 }).withMessage('Item number is required'),
   body('name').trim().isLength({ min: 1 }).withMessage('Name is required'),
   body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty if provided'),
@@ -484,8 +514,7 @@ router.post('/', [
 
 // Update product
 router.put('/:id', [
-  authenticateUser,
-  requireAdmin,
+  authenticateUserOrVendor,
   body('name').optional().trim().isLength({ min: 1 }).withMessage('Name cannot be empty'),
   body('description').optional().trim().isLength({ min: 1 }).withMessage('Description cannot be empty'),
   body('sellingPrice').optional().isFloat({ min: 0 }).withMessage('sellingPrice must be >= 0'),
@@ -558,11 +587,7 @@ router.put('/:id', [
 // Delete product (soft delete)
 router.delete('/:id', authenticateUser, requireAdmin, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
-      { isActive: false },
-      { new: true }
-    );
+    const product = await Product.findById(req.params.id);
 
     if (!product) {
       return res.status(404).json({
@@ -570,6 +595,12 @@ router.delete('/:id', authenticateUser, requireAdmin, async (req, res) => {
         message: 'Product not found'
       });
     }
+
+    const deletedProduct = await Product.findByIdAndUpdate(
+      req.params.id,
+      { isActive: false },
+      { new: true }
+    );
 
     try {
       const io = req.app.get('io');
@@ -657,8 +688,12 @@ router.get('/:id/statistics', authenticateUser, async (req, res) => {
 
 module.exports = router;
 // Upload product image
-router.post('/:id/image', [authenticateUser, requireAdmin, productUpload.single('image')], async (req, res) => {
+router.post('/:id/image', [authenticateUserOrVendor, productUpload.single('image')], async (req, res) => {
   try {
+    if (!req.user && !req.vendor) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file provided' });
     }
@@ -666,6 +701,17 @@ router.post('/:id/image', [authenticateUser, requireAdmin, productUpload.single(
     const product = await Product.findById(req.params.id);
     if (!product || !product.isActive) {
       return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // For vendor users, ensure they can only upload images for their own products
+    if (req.userType === 'vendor' || (req.user && req.user.role === 'vendor')) {
+      const vendorId = req.vendor?.id || req.user?.id;
+      if (product.vendorId && product.vendorId.toString() !== vendorId?.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'You can only upload images for your own products'
+        });
+      }
     }
 
     const imagePath = `/upload/${req.file.filename}`;
