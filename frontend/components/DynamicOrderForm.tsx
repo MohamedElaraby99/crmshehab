@@ -20,6 +20,7 @@ interface OrderItem {
   productName: string;
   quantity: number;
   unitPrice?: number;
+  imageFile?: File;
 }
 
 const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
@@ -227,11 +228,13 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         )
       : fieldsToValidate.filter(f =>
           // For vendor orders, exclude item-specific fields that come from table items
+          // Also exclude the overall 'price' field since vendors use unitPrice per item
           f.name !== 'unitPrice' &&
           f.name !== 'quantity' &&
           f.name !== 'itemNumber' &&
           f.name !== 'productName' &&
-          f.name !== 'totalPrice'
+          f.name !== 'totalPrice' &&
+          f.name !== 'price'
         );
 
     console.log('DynamicOrderForm: Fields to validate:', finalFields.map(f => f.name));
@@ -368,7 +371,7 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         ...formData
       };
 
-      // Remove vendor-only fields from admin create payload
+      // Remove fields that shouldn't be sent to backend
       if (orderData.price !== undefined) delete orderData.price;
       if (orderData.confirmFormShehab !== undefined) delete orderData.confirmFormShehab;
       if (orderData.totalAmount !== undefined) delete orderData.totalAmount;
@@ -433,6 +436,9 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
         totalAmount: tableTotalAmount,
         ...formData
       };
+
+      // Remove the overall price field from vendor orders since they use unitPrice per item
+      if (orderData.price !== undefined) delete orderData.price;
 
       console.log('DynamicOrderForm: Final vendor orderData:', orderData);
     }
