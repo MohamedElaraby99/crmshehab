@@ -220,7 +220,6 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
     // Additionally exclude fields we intentionally hide from admin in UI and order item fields
     const finalFields = userRole === 'admin'
       ? fieldsToValidate.filter(f =>
-          f.name !== 'price' &&
           f.name !== 'confirmFormShehab' &&
           f.name !== 'quantity' &&
           f.name !== 'itemNumber' &&
@@ -229,12 +228,14 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
       : fieldsToValidate.filter(f =>
           // For vendor orders, exclude item-specific fields that come from table items
           // Also exclude the overall 'price' field since vendors use unitPrice per item
+          // and any admin-only fields
           f.name !== 'unitPrice' &&
           f.name !== 'quantity' &&
           f.name !== 'itemNumber' &&
           f.name !== 'productName' &&
           f.name !== 'totalPrice' &&
-          f.name !== 'price'
+          f.name !== 'price' &&
+          f.name !== 'confirmFormShehab'
         );
 
     console.log('DynamicOrderForm: Fields to validate:', finalFields.map(f => f.name));

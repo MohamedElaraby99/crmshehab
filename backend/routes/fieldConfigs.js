@@ -341,9 +341,9 @@ router.post('/reset', [authenticateUser, requireAdmin], async (req, res) => {
         name: 'price',
         label: 'Price ($)',
         type: 'number',
-        required: true,
+        required: false,
         editableBy: 'admin',
-        visibleTo: 'both',
+        visibleTo: 'admin',
         validation: { min: 0 },
         order: 4
       },
