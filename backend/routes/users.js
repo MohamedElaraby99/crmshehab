@@ -8,7 +8,7 @@ const router = express.Router();
 // List users (admin)
 router.get('/', authenticateUser, requireAdmin, async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const users = await User.find({ $or: [{ isActive: true }, { isActive: { $exists: false } }] }).select('-password');
     res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Internal server error' });

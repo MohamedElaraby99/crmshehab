@@ -75,7 +75,12 @@ const UsersPage: React.FC<UsersPageProps> = ({ onLogout }) => {
 
   const handleDeactivate = async (id: string) => {
     const ok = await deleteUser(id);
-    if (ok) fetchUsers();
+    if (ok) {
+      alert('User deleted successfully!');
+      fetchUsers();
+    } else {
+      alert('Failed to delete user');
+    }
   };
 
   return (
