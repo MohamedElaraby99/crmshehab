@@ -385,9 +385,9 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
   };
 
   return (
-    <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+    <div className="bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
       {/* Excel-like toolbar */}
-      <div className="bg-gray-100 border-b border-gray-300 px-4 py-2">
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 border-b border-gray-200 px-6 py-4">
         {/* Top row - Search and Orders count */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-4">
@@ -416,7 +416,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                 <span className="text-sm text-blue-600">{selectedRows.size} selected</span>
                 <button
                   onClick={handleBulkDelete}
-                  className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                  className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                 >
                   Delete Selected
                 </button>
@@ -424,12 +424,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             )}
           </div>
         <div className="flex items-center space-x-2">
-            <button 
+            <button
               onClick={handleExportExcel}
-              className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-200 flex items-center space-x-1"
+              className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               title="Export filtered orders to Excel"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <span>Export Excel</span>
@@ -446,7 +446,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             <select
               value={searchType}
               onChange={(e) => setSearchType(e.target.value as 'invoiceNumber' | 'itemCount' | 'all')}
-              className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+              className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-all duration-200 font-medium"
             >
               <option key="all" value="all">All Fields</option>
               <option key="invoiceNumber" value="invoiceNumber">Invoice Number</option>
@@ -455,15 +455,15 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
             <input
               type="text"
               placeholder={
-                searchType === 'invoiceNumber' 
-                  ? 'Search by invoice number...' 
+                searchType === 'invoiceNumber'
+                  ? 'Search by invoice number...'
                   : searchType === 'itemCount'
                   ? 'Search by number of items...'
                   : 'Search orders...'
               }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="text-xs border border-gray-300 rounded px-3 py-1 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="text-sm border border-gray-200 rounded-lg px-4 py-2 w-72 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:border-gray-300 transition-all duration-200 font-medium"
             />
             {searchTerm && (
               <button
@@ -478,12 +478,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           
           {/* Vendor filter (admin only) */}
           {userIsAdmin && (
-            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <span className="text-sm font-medium text-gray-700">Vendor:</span>
               <select
                 value={selectedVendor}
                 onChange={(e) => setSelectedVendor(e.target.value)}
-                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white min-w-40"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-all duration-200 font-medium min-w-40"
               >
                 <option value="all">All Vendors</option>
                 {uniqueVendors.map(vendor => (
@@ -506,12 +506,12 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
 
           {/* Status filter (admin only) */}
           {userIsAdmin && (
-            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <span className="text-sm font-medium text-gray-700">Status:</span>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white min-w-32"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-all duration-200 font-medium min-w-32"
               >
                 <option value="all">All</option>
                 <option value="pending">Pending</option>
@@ -534,13 +534,13 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
           
           {/* Date range filter (admin only) */}
           {userIsAdmin && (
-            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded px-2 py-1">
+            <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <span className="text-sm font-medium text-gray-700">Date:</span>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-all duration-200 font-medium"
                 title="From"
               />
               <span className="text-xs text-gray-500">to</span>
@@ -548,7 +548,7 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-all duration-200 font-medium"
                 title="To"
               />
               {(dateFrom || dateTo) && (
@@ -565,51 +565,74 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
         </div>
       </div>
 
-      {userIsAdmin && (
-            <div className="flex items-center space-x-2 text-xs text-gray-600">
-              <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
-              <span>Current time: {currentTime.toLocaleTimeString()}</span>
-            </div>
-          )}
 
 
       {/* Excel-like table */}
-      <div 
+      <div
         ref={tableRef}
-        className="overflow-auto max-h-96"
-        style={{ fontFamily: 'Arial, sans-serif' }}
+        className="overflow-auto max-h-[600px] rounded-b-lg"
+        style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
       >
         
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-gray-200 border-b border-gray-300">
+            <tr className="bg-gradient-to-r from-gray-100 to-gray-50 border-b-2 border-gray-300">
               {/* Row number column */}
-              <th className="w-12 h-8 border border-gray-300 bg-gray-100 text-center text-xs font-medium text-gray-600">
+              <th className="w-12 h-10 border border-gray-200 bg-white text-center text-sm font-bold text-gray-800">
                 <input
                   type="checkbox"
                   checked={selectedRows.size === filteredOrders.length && filteredOrders.length > 0}
                   onChange={handleSelectAll}
-                  className="w-3 h-3"
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                 />
               </th>
               {/* Data columns */}
-              {columns.map(column => (
-                <th
-                  key={column.key}
-                  className="border border-gray-300 bg-gray-100 text-center text-xs font-medium text-gray-600 cursor-pointer hover:bg-gray-150 select-none"
-                  style={{ width: column.width, minWidth: column.width }}
-                  onClick={() => column.key !== 'actions' && handleSort(column.key)}
-                >
-                  <div className="flex items-center justify-center space-x-1">
-                    <span>{column.label}</span>
-                    {sortConfig?.key === column.key && (
-                      <span className="text-xs">
-                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                      </span>
-                    )}
-                  </div>
-                </th>
-              ))}
+              {columns.map(column => {
+                // Special styling for Item Number column
+                if (column.key === 'itemNumber') {
+                  return (
+                    <th
+                      key={column.key}
+                      className="border border-gray-200 bg-gradient-to-br from-blue-50 to-blue-100/50 text-center text-sm font-bold text-blue-900 cursor-pointer hover:from-blue-100 hover:to-blue-50 select-none border-r-2 border-blue-200"
+                      style={{ width: column.width, minWidth: column.width }}
+                      onClick={() => column.key !== 'actions' && handleSort(column.key)}
+                    >
+                      <div className="flex items-center justify-center space-x-2">
+                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                        </svg>
+                        <span>{column.label}</span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                          PRIMARY
+                        </span>
+                        {sortConfig?.key === column.key && (
+                          <span className="text-xs">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
+                    </th>
+                  );
+                }
+
+                return (
+                  <th
+                    key={column.key}
+                    className="border border-gray-200 bg-white text-center text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-50 select-none"
+                    style={{ width: column.width, minWidth: column.width }}
+                    onClick={() => column.key !== 'actions' && handleSort(column.key)}
+                  >
+                    <div className="flex items-center justify-center space-x-1">
+                      <span>{column.label}</span>
+                      {sortConfig?.key === column.key && (
+                        <span className="text-xs">
+                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -646,11 +669,25 @@ const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDelete
       </div>
 
       {/* Excel-like status bar */}
-      <div className="bg-gray-100 border-t border-gray-300 px-4 py-1 flex items-center justify-between text-xs text-gray-600">
-        <div className="flex items-center space-x-4">
-          <span>Ready</span>
-          <span>{safeOrders.length} orders</span>
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 border-t border-gray-200 px-6 py-3 flex items-center justify-between text-sm text-gray-700">
+        <div className="flex items-center space-x-6">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="font-medium">Ready</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <span className="font-semibold text-gray-900">{safeOrders.length} orders</span>
+          </div>
         </div>
+        {userIsAdmin && (
+          <div className="flex items-center space-x-2 text-xs">
+            <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+            <span>Current time: {currentTime.toLocaleTimeString()}</span>
+          </div>
+        )}
       </div>
     </div>
   );

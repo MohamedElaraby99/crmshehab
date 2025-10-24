@@ -44,10 +44,10 @@ const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({
   }, [productId]);
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-10 mx-auto p-5 border w-full max-w-6xl shadow-lg rounded-md bg-white">
-        <div className="mt-3">
-          <div className="flex justify-between items-center mb-4">
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm overflow-y-auto h-full w-full z-50">
+      <div className="relative top-8 mx-auto p-6 border w-full max-w-7xl shadow-2xl rounded-2xl bg-white">
+        <div className="mt-2">
+          <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
             <h3 className="text-2xl font-bold text-gray-900">
               Purchase History: {productName}
             </h3>

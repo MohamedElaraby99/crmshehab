@@ -208,51 +208,68 @@ const VendorsPage: React.FC<VendorsPageProps> = ({ onLogout }) => {
         </div>
 
         {/* Vendors Table */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-              Vendors ({filteredVendors.length})
-            </h3>
-            <div className="overflow-x-auto">
+        <div className="bg-white border border-gray-200 shadow-lg overflow-hidden rounded-xl">
+          <div className="px-6 py-5">
+            <div className="flex items-center space-x-3 mb-6">
+              <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  Vendor Management
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {filteredVendors.length} vendors • Manage supplier relationships and information
+                </p>
+              </div>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Vendor
+                <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50">
+                  <tr className="border-b border-gray-200">
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-800 uppercase tracking-wider">
+                      <div className="flex items-center space-x-2">
+                        <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <span>Vendor</span>
+                      </div>
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Contact
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Location
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Online</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Orders Read</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">Online</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">Last Orders Read</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Login Info
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-100">
                   {filteredVendors.map((vendor) => (
-                    <tr key={vendor.id} className="hover:bg-gray-50">
+                    <tr key={vendor.id} className="hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{vendor.name}</div>
-                         
+                          <div className="text-base font-bold text-gray-900">{vendor.name}</div>
+                          <div className="text-xs text-gray-500 mt-1">ID: {vendor.id}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm text-gray-900">{vendor.contactPerson}</div>
-                          <div className="text-sm text-gray-500">{vendor.email}</div>
-                          <div className="text-sm text-gray-500">{vendor.phone}</div>
+                          <div className="text-base font-semibold text-gray-900">{vendor.contactPerson}</div>
+                          <div className="text-sm text-gray-600 font-medium">{vendor.email}</div>
+                          <div className="text-sm text-gray-600 font-medium">{vendor.phone}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

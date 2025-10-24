@@ -42,14 +42,15 @@ const EditableCell: React.FC<{
   const [editValue, setEditValue] = useState(String(value ?? ''));
   
   const cellClasses = `
-    h-8 border border-gray-300 px-2 text-xs
-    ${isSelected ? 'bg-blue-100' : 'bg-white'}
-    ${isEditable ? 'cursor-pointer hover:bg-gray-50' : 'cursor-default'}
-    ${!userIsAdmin && isEditable ? 'bg-green-50' : ''}
+    h-10 border border-gray-200 px-3 text-sm font-medium
+    ${isSelected ? 'bg-blue-100 border-blue-300' : 'bg-white'}
+    ${isEditable ? 'cursor-pointer hover:bg-gray-50 hover:border-gray-300' : 'cursor-default'}
+    ${!userIsAdmin && isEditable ? 'bg-green-50 border-green-200' : ''}
+    transition-all duration-200
   `;
 
   const inputClasses = `
-    w-full h-full border-none outline-none px-1 text-xs bg-transparent
+    w-full h-full border-none outline-none px-2 text-sm font-medium bg-transparent rounded
     ${isSelected ? 'bg-blue-100' : 'bg-white'}
   `;
 
@@ -470,15 +471,14 @@ const OrderRow: React.FC<OrderRowProps> = ({
   const getCellValue = (columnKey: string) => {
     switch (columnKey) {
       case 'itemImage':
-        // Prefer item image, fallback to order-level image if item image is missing
-        const itemImage = currentItem?.itemImageUrl || currentItem?.imagePath || (order as any).itemImageUrl || (order as any).imagePath || '';
-        console.log('Item image for item', order.itemIndex, ':', {
-          itemItemImageUrl: currentItem?.itemImageUrl,
-          itemImagePath: currentItem?.imagePath,
-          orderItemImageUrl: (order as any).itemImageUrl,
-          orderImagePath: (order as any).imagePath,
-          finalImage: itemImage
-        });
+        // Check for item-level images first, then product-level images
+        let itemImage = currentItem?.itemImageUrl || currentItem?.imagePath || (order as any).itemImageUrl || (order as any).imagePath || '';
+
+        // If no item-level image, check product-level images
+        if (!itemImage && currentItem?.productId?.images && currentItem.productId.images.length > 0) {
+          itemImage = currentItem.productId.images[0]; // Use first image from product
+        }
+
         return itemImage;
       case 'itemNumber':
         return currentItem?.itemNumber || 'N/A';
@@ -657,34 +657,34 @@ const OrderRow: React.FC<OrderRowProps> = ({
   const itemCount = totalItemsInOrder;
 
   // Determine row styling based on item position in order
-  let rowStyling = `${isEven ? 'bg-white' : 'bg-gray-50'} ${isSelected ? 'bg-blue-100' : ''} ${isVendorFieldsCompleted() ? 'border-l-4 border-l-green-500' : ''} hover:bg-blue-50`;
-  
+  let rowStyling = `${isEven ? 'bg-white' : 'bg-gray-50'} ${isSelected ? 'bg-blue-100 border-blue-300' : ''} ${isVendorFieldsCompleted() ? 'border-l-4 border-l-green-500' : ''} hover:bg-blue-50 transition-all duration-200`;
+
   if (hasMultipleItems) {
     if (isFirstItem) {
-      rowStyling += ' border-t-2 border-t-orange-400';
+      rowStyling += ' border-t-2 border-t-blue-400 rounded-t-lg';
     }
     if (isLastItem) {
-      rowStyling += ' border-b-2 border-b-orange-400';
+      rowStyling += ' border-b-2 border-b-blue-400 rounded-b-lg';
     }
     if (!isFirstItem && !isLastItem) {
-      rowStyling += ' border-l-2 border-l-orange-300';
+      rowStyling += ' border-l-2 border-l-blue-300';
     }
   }
 
   return (
     <tr className={rowStyling}>
       {/* Row number and selection */}
-      <td className="w-12 h-8 border border-gray-300 bg-gray-100 text-center text-xs relative">
+      <td className="w-12 h-10 border border-gray-200 bg-white text-center text-sm font-bold relative">
         <div className="flex flex-col items-center justify-center h-full">
           <input
             type="checkbox"
             checked={isSelected}
             onChange={onSelect}
-            className="w-3 h-3"
+            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
           />
           {hasMultipleItems && (
             <div className="mt-1">
-              <span className="inline-flex items-center px-1 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
                 {itemIndex + 1}/{itemCount}
               </span>
             </div>
@@ -808,7 +808,27 @@ const OrderRow: React.FC<OrderRowProps> = ({
     const canUpload = !userIsAdmin; // vendors only
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const itemImageUrl = getCellValue('itemImage');
-    
+
+    // Get all available images for this item (from product or item level)
+    const getAllImages = () => {
+      const images = [];
+
+      // Check item-level images
+      if (currentItem?.itemImageUrl) images.push(currentItem.itemImageUrl);
+      if (currentItem?.imagePath && currentItem.imagePath !== currentItem?.itemImageUrl) images.push(currentItem.imagePath);
+
+      // Check product-level images
+      if (currentItem?.productId?.images) {
+        images.push(...currentItem.productId.images);
+      }
+
+      // Remove duplicates
+      return [...new Set(images)];
+    };
+
+    const allImages = getAllImages();
+    const hasMultipleImages = allImages.length > 1;
+
           return (
             <td
               key={column.key}
@@ -817,75 +837,29 @@ const OrderRow: React.FC<OrderRowProps> = ({
             >
               <div className="flex items-center justify-center space-x-2">
           {itemImageUrl ? (
-            <a
-              href={`${getApiOrigin().replace(/\/api\/?$/, '')}${itemImageUrl}`}
-              target="_blank"
-              rel="noreferrer"
-              title="Open full image"
-            >
-              <img
-                src={`${getApiOrigin().replace(/\/api\/?$/, '')}${itemImageUrl}`}
-                alt="Item"
-                className="w-10 h-10 object-cover rounded border"
-              />
-            </a>
+            <div className="flex items-center space-x-1">
+              <a
+                href={`${getApiOrigin().replace(/\/api\/?$/, '')}${itemImageUrl}`}
+                target="_blank"
+                rel="noreferrer"
+                title={hasMultipleImages ? `View all ${allImages.length} images` : "Open full image"}
+              >
+                <img
+                  src={`${getApiOrigin().replace(/\/api\/?$/, '')}${itemImageUrl}`}
+                  alt="Item"
+                  className="w-10 h-10 object-cover rounded border hover:opacity-80 transition-opacity"
+                />
+              </a>
+              {hasMultipleImages && (
+                <span className="text-xs text-gray-500 bg-gray-100 px-1 rounded">
+                  +{allImages.length - 1}
+                </span>
+              )}
+            </div>
           ) : (
                   <span className="text-xs text-gray-400">No image</span>
                 )}
-          {canUpload && (
-            <>
-              <button
-                type="button"
-                className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-                onClick={() => fileInputRef.current?.click()}
-                title={itemImageUrl ? 'Change this item image' : 'Upload image for this item'}
-              >
-                {itemImageUrl ? 'Change' : 'Upload'}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const inputEl = e.currentTarget;
-                  const file = inputEl.files && inputEl.files[0];
-                  if (!file) return;
-                  try {
-                    const result = await uploadOrderItemImage(editableOrder.id, order.itemIndex || 0, file);
-                    if (result.success) {
-                      // Update local state with the new item image
-                      setEditableOrder(prev => {
-                        const updatedItems = [...prev.items];
-                        if (updatedItems[order.itemIndex || 0]) {
-                          updatedItems[order.itemIndex || 0].itemImageUrl = result.data.itemImageUrl;
-                          updatedItems[order.itemIndex || 0].imagePath = result.data.imagePath;
-                        }
-                        return { ...prev, items: updatedItems };
-                      });
-                      
-                      // Create updated order with only the item image change
-                      const updatedOrder = { ...editableOrder };
-                      if (updatedOrder.items && updatedOrder.items[order.itemIndex || 0]) {
-                        updatedOrder.items[order.itemIndex || 0].itemImageUrl = result.data.itemImageUrl;
-                        updatedOrder.items[order.itemIndex || 0].imagePath = result.data.imagePath;
-                      }
-                      
-                      // Notify parent component to refresh
-                      onUpdate(updatedOrder);
-                    } else {
-                      alert(`Failed to upload image: ${result.message}`);
-                    }
-                  } catch (err) {
-                    console.error('Upload error:', err);
-                    alert('Failed to upload image. Please try again.');
-                  } finally {
-                    inputEl.value = '';
-                  }
-                }}
-              />
-            </>
-          )}
+          
               </div>
             </td>
           );
@@ -896,21 +870,39 @@ const OrderRow: React.FC<OrderRowProps> = ({
         const isEditable = canEditField(column.key as any);
 
         // Special handling for item number column to show item position info
-        if (column.key === 'itemNumber' && hasMultipleItems) {
+        if (column.key === 'itemNumber') {
+          const isMultiItem = hasMultipleItems || (currentItem?.itemNumber && itemCount > 1);
+
+          if (isMultiItem) {
+            return (
+              <td
+                key={column.key}
+                className="h-10 border border-blue-200 px-3 text-sm bg-gradient-to-br from-blue-50 to-blue-100/50 border-r-2 border-blue-200"
+                style={{ width: column.width, minWidth: column.width }}
+                title={`Item ${itemIndex + 1} of ${itemCount} in this order`}
+              >
+                <div className="flex items-center justify-between h-full">
+                  <span className="font-bold text-blue-900">
+                    {currentItem?.itemNumber || 'N/A'}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                      {itemIndex + 1}/{itemCount}
+                    </span>
+                  </div>
+                </div>
+              </td>
+            );
+          }
+
           return (
-            <td 
+            <td
               key={column.key}
-              className="h-8 border border-gray-300 px-2 text-xs bg-orange-50"
+              className="h-10 border border-blue-200 px-3 text-sm bg-gradient-to-br from-blue-50 to-blue-100/50 border-r-2 border-blue-200 font-bold text-blue-900"
               style={{ width: column.width, minWidth: column.width }}
-              title={`Item ${itemIndex + 1} of ${itemCount} in this order`}
             >
               <div className="flex items-center h-full">
-                <span className="font-medium text-orange-800">
-                  {currentItem?.itemNumber || 'N/A'} 
-                </span>
-                <span className="ml-1 text-orange-600 font-semibold">
-                  ({itemIndex + 1}/{itemCount})
-                </span>
+                {currentItem?.itemNumber || 'N/A'}
               </div>
             </td>
           );

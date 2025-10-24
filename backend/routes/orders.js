@@ -85,11 +85,11 @@ router.post('/:id/items/:itemIndex/transfer', [
     // Fetch populated versions
     const updatedOrder = await Order.findById(order._id).populate([
       { path: 'vendorId', select: 'name' },
-      { path: 'items.productId', select: 'name itemNumber' }
+      { path: 'items.productId', select: 'name itemNumber images' }
     ]);
     const createdOrder = await Order.findById(newOrder._id).populate([
       { path: 'vendorId', select: 'name' },
-      { path: 'items.productId', select: 'name itemNumber' }
+      { path: 'items.productId', select: 'name itemNumber images' }
     ]);
 
     try {
@@ -194,7 +194,7 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
       .skip((page - 1) * limit)
       .populate([
         { path: 'vendorId', select: 'name contactPerson email' },
-        { path: 'items.productId', select: 'name itemNumber' }
+        { path: 'items.productId', select: 'name itemNumber images' }
       ]);
 
     // Filter by item count if needed
@@ -431,7 +431,7 @@ router.post('/', [
     await order.save();
     await order.populate([
       { path: 'vendorId', select: 'name contactPerson email' },
-      { path: 'items.productId', select: 'name itemNumber' }
+      { path: 'items.productId', select: 'name itemNumber images' }
     ]);
 
     // Transform order to include itemImageUrl for frontend compatibility
@@ -842,7 +842,7 @@ router.put('/:id', [
     // Fetch the final updated order with populated fields
     const finalUpdatedOrder = await Order.findById(req.params.id).populate([
       { path: 'vendorId', select: 'name contactPerson email' },
-      { path: 'items.productId', select: 'name itemNumber' }
+      { path: 'items.productId', select: 'name itemNumber images' }
     ]);
 
     console.log('OrderRow: Final updated order from DB:', JSON.stringify(finalUpdatedOrder.items, null, 2));
@@ -942,7 +942,7 @@ router.get('/vendor/:vendorId', authenticateVendor, async (req, res) => {
       .sort({ orderDate: -1 })
       .populate([
         { path: 'vendorId', select: 'name contactPerson email' },
-        { path: 'items.productId', select: 'name itemNumber' }
+        { path: 'items.productId', select: 'name itemNumber images' }
       ]);
 
     // Note: Item-level field migration removed to prevent VersionError conflicts
@@ -1095,7 +1095,7 @@ router.post('/:id/confirm-item', authenticateUserOrVendor, async (req, res) => {
     // Fetch the updated order with populated fields
     const updatedOrder = await Order.findById(req.params.id).populate([
       { path: 'vendorId', select: 'name contactPerson email' },
-      { path: 'items.productId', select: 'name itemNumber' }
+      { path: 'items.productId', select: 'name itemNumber images' }
     ]);
     
     // Transform order to include itemImageUrl for frontend compatibility
@@ -1248,7 +1248,7 @@ router.post('/:id/item/:itemIndex/image', [authenticateUserOrVendor, upload.sing
     try {
       const o = await Order.findById(order._id).populate([
         { path: 'vendorId', select: 'name contactPerson email' },
-        { path: 'items.productId', select: 'name itemNumber' }
+        { path: 'items.productId', select: 'name itemNumber images' }
       ]);
       if (o) {
         const oObj = o.toObject();
@@ -1351,7 +1351,7 @@ router.post('/:id/image', [authenticateUserOrVendor, upload.single('image')], as
     try {
       const o = await Order.findById(order._id).populate([
         { path: 'vendorId', select: 'name contactPerson email' },
-        { path: 'items.productId', select: 'name itemNumber' }
+        { path: 'items.productId', select: 'name itemNumber images' }
       ]);
       if (o) {
         const oObj = o.toObject();

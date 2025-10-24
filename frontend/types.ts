@@ -3,6 +3,8 @@ export interface OrderItem {
   productId: {
     id: string;
     name: string;
+    itemNumber: string;
+    images?: string[];
   };
   itemNumber: string;
   quantity: number;

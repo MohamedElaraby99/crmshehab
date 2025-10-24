@@ -37,9 +37,12 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
 
 
   // Consistent price formatting based on role
-  const formatPriceForUser = (value: number) => {
-    if (typeof value !== 'number' || Number.isNaN(value)) return '-';
-    return userIsClient ? `${value.toFixed(2)} RS ريال سعودي` : `¥ ${value.toFixed(2)}`;
+  const formatPriceForUser = (value: number | null | undefined) => {
+    if (value === null || value === undefined || typeof value !== 'number' || Number.isNaN(value)) {
+      return { display: 'Not Set', color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-200' };
+    }
+    const formattedPrice = userIsClient ? `${value.toFixed(2)} RS ريال سعودي` : `¥ ${value.toFixed(2)}`;
+    return { display: formattedPrice, color: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-200' };
   };
 
   useEffect(() => {
@@ -352,31 +355,58 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
       </div>
 
       {/* Products Display */}
-      <div className="bg-white/90 backdrop-blur-sm shadow-lg ring-1 ring-black/5 overflow-hidden sm:rounded-xl">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-            Products ({filteredProducts.length})
-          </h3>
+      <div className="bg-white border border-gray-200 shadow-xl overflow-hidden rounded-2xl">
+        <div className="px-6 py-6">
+          <div className="flex items-center space-x-4 mb-6 pb-4 border-b border-gray-100">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M9 5l8 4" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900 tracking-tight">
+                Product Catalog
+              </h3>
+              <p className="text-sm text-gray-600 font-medium mt-1">
+                {filteredProducts.length} products available • Search and browse our complete inventory
+              </p>
+            </div>
+          </div>
           {loading ? (
             <div>
-              <div className="animate-pulse space-y-3">
-                <div className="h-4 bg-gray-200 rounded w-32"></div>
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="bg-gray-50 h-10"></div>
-                  <div className="divide-y">
+              <div className="animate-pulse space-y-4">
+                <div className="h-6 bg-gray-200 rounded-lg w-48"></div>
+                <div className="border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 h-12 border-b border-gray-200"></div>
+                  <div className="divide-y divide-gray-100">
                     {[...Array(6)].map((_, i) => (
-                      <div key={i} className="grid grid-cols-6 gap-4 p-4">
-                        <div className="col-span-2 flex items-center space-x-3">
-                          <div className="h-10 w-10 rounded-lg bg-gray-200"></div>
+                      <div key={i} className="p-6">
+                        <div className="flex items-center space-x-4 mb-4">
+                          <div className="h-14 w-14 rounded-xl bg-gray-200"></div>
                           <div className="flex-1">
-                            <div className="h-3 bg-gray-200 rounded w-32 mb-2"></div>
-                            <div className="h-3 bg-gray-100 rounded w-48"></div>
+                            <div className="h-5 bg-gray-200 rounded-lg w-48 mb-2"></div>
+                            <div className="h-4 bg-gray-100 rounded w-32"></div>
+                          </div>
+                          <div className="text-right">
+                            <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
+                            <div className="h-8 bg-gray-200 rounded-lg w-32"></div>
                           </div>
                         </div>
-                        <div className="h-3 bg-gray-200 rounded w-24"></div>
-                        <div className="h-3 bg-gray-200 rounded w-20"></div>
-                        <div className="h-3 bg-gray-100 rounded w-16"></div>
-                        <div className="h-8 bg-gray-200 rounded w-24 justify-self-end"></div>
+                        <div className="mb-4">
+                          <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                          <div className="h-4 bg-gray-100 rounded w-3/4"></div>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                          <div className="h-4 bg-gray-200 rounded w-32 mb-2"></div>
+                          <div className="h-6 bg-gray-200 rounded w-20"></div>
+                        </div>
+                        <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                          <div className="h-8 bg-gray-200 rounded w-24"></div>
+                          <div className="flex space-x-2">
+                            <div className="h-8 bg-gray-200 rounded w-16"></div>
+                            <div className="h-8 bg-gray-200 rounded w-16"></div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -385,20 +415,20 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             </div>
           ) : (
             /* Grid View */
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredProducts.map((product) => {
                 const stats = getProductPurchaseStatsSync(product.id);
                 return (
-                  <div key={product.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow bg-white/90 backdrop-blur-sm h-full flex flex-col">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-12 w-12">
+                  <div key={product.id} className="border border-gray-200 rounded-2xl p-6 hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-white to-gray-50/50 hover:from-white hover:to-blue-50/30 h-full flex flex-col group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center space-x-4">
+                        <div className="relative h-14 w-14">
                           {productImageMap[product.id] ? (
                             <>
                               <img
                                 src={`${getApiOrigin().replace(/\/api\/?$/, '')}${productImageMap[product.id]}`}
                                 alt={product.name}
-                                className="h-12 w-12 rounded-lg object-cover border cursor-pointer"
+                                className="h-14 w-14 rounded-xl object-cover border-2 border-gray-200 cursor-pointer hover:border-blue-300 transition-all duration-200"
                                 title="Click to view photo"
                                 onClick={() => openImagePreview(product)}
                                 onError={(e) => {
@@ -408,66 +438,122 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                                 }}
                                 onLoad={() => console.log('Image loaded successfully for product', product.id)}
                               />
-                              <div className="h-12 w-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center hidden">
+                              <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 flex items-center justify-center hidden">
                                 <span className="text-2xl">📦</span>
                               </div>
                             </>
                           ) : (
-                            <div className="h-12 w-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
-                              <span className="text-2xl">📦</span>
+                            <div className="h-14 w-14 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 flex items-center justify-center">
+                              <span className="text-3xl">📦</span>
                             </div>
                           )}
                         </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <h4 className="text-lg font-semibold text-gray-900">{product.name}</h4>
-                            {userIsAdmin && (
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${((product as any).visibleToClients === false ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200')}`}
-                                title={((product as any).visibleToClients === false ? 'Hidden from clients' : 'Visible to clients')}
-                              >
-                                {((product as any).visibleToClients === false ? 'Hidden' : 'Visible')}
-                              </span>
-                            )}
+                        
+                        <div className="flex-1">
+                          <div className="flex items-start space-x-3">
+                            <div className="flex-1">
+                              <h4 className="text-xl font-bold text-gray-900 mb-1 leading-tight">{product.name}</h4>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                  </svg>
+                                  <span className="text-sm font-semibold text-blue-900 bg-blue-50 px-3 py-1 rounded-full border border-blue-200">
+                                    {product.itemNumber}
+                                  </span>
+                                </div>
+                                {userIsAdmin && (
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${((product as any).visibleToClients === false ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200')}`}
+                                    title={((product as any).visibleToClients === false ? 'Hidden from clients' : 'Visible to clients')}
+                                  >
+                                    {((product as any).visibleToClients === false ? 'Hidden' : 'Visible')}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-sm text-gray-500 font-mono">{product.itemNumber}</p>
+                          <div className="flex items-center space-x-2" >
+                        <div className="text-sm font-bold text-gray-700 mb-2"> Selling Price</div>
+                        {(() => {
+                          const priceInfo = formatPriceForUser((product as any).sellingPrice);
+                          return (
+                            <div className={`text-2xl font-bold ${priceInfo.color} ${priceInfo.bgColor} px-4 py-2 rounded-xl border-2 ${priceInfo.borderColor} shadow-sm`}>
+                              {priceInfo.display}
+                            </div>
+                          );
+                        })()}
+                        {formatPriceForUser((product as any).sellingPrice).display === 'Not Set' && userIsAdmin && (
+                          <div className="mt-2">
+                            <button
+                              onClick={() => handleEditProduct(product)}
+                              className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors font-medium inline-flex items-center shadow-sm hover:shadow-md"
+                            >
+                              <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                              </svg>
+                              Set Price
+                            </button>
+                          </div>
+                        )}
+                        {formatPriceForUser((product as any).sellingPrice).display !== 'Not Set' && (
+                          <div className="text-xs text-green-600 font-medium mt-1">
+                            ✓ Price configured
+                          </div>
+                        )}
+                        {formatPriceForUser((product as any).sellingPrice).display === 'Not Set' && userIsVendor && (
+                          <div className="text-xs text-amber-600 font-medium mt-1">
+                            ⏳ Awaiting pricing
+                          </div>
+                        )}
+                      </div>
                         </div>
+                        
                       </div>
-                      <div className="text-right">
-                      <div className="text-sm text-gray-500">Selling Price</div>
-                        <div className="text-base font-semibold text-gray-900">{formatPriceForUser((product as any).sellingPrice)}</div>
-                      </div>
+                      
                     </div>
 
                     <p className="text-sm text-gray-500 mb-4 line-clamp-2 break-words">{product.description}</p>
 
-                    <div className="mb-3">
-                      <div className="text-sm text-gray-600">Available Stock</div>
+                    <div className="mb-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-semibold text-gray-700">Available Stock</div>
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M9 5l8 4" />
+                        </svg>
+                      </div>
                       {(() => {
                         const stock = typeof (product as any).stock === 'number' ? (product as any).stock : 0;
                         const reorder = typeof (product as any).reorderLevel === 'number' ? (product as any).reorderLevel : 0;
-                        const levelClass = stock <= 0 ? 'bg-red-50 text-red-700 ring-red-200' : (stock <= reorder ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200');
+                        const levelClass = stock <= 0 ? 'bg-red-100 text-red-800 border-red-200' : (stock <= reorder ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200');
                         const levelText = stock <= 0 ? 'Out of stock' : (stock <= reorder ? 'Low stock' : 'In stock');
                         return (
-                          <div className="flex items-center space-x-2">
-                            <div className="text-lg font-semibold text-gray-900">{stock}<span className="text-sm text-gray-500 ml-1">units</span></div>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ring-1 ${levelClass}`}>{levelText}</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <div className="text-2xl font-bold text-gray-900 bg-white px-3 py-1 rounded-lg border border-gray-200">
+                                {stock}
+                              </div>
+                              <span className="text-sm font-medium text-gray-600">units</span>
+                            </div>
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${levelClass}`}>
+                              {levelText}
+                            </span>
                           </div>
                         );
                       })()}
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mt-auto pt-2">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mt-auto pt-4 border-t border-gray-100">
                       {!userIsClient && (
                         <button
                           onClick={() => handleViewHistory(product)}
-                          className="text-green-700 hover:text-green-900 text-sm font-medium w-full sm:w-auto text-left sm:text-inherit"
+                          className="text-green-700 hover:text-green-900 text-sm font-semibold w-full sm:w-auto text-left sm:text-center transition-all duration-200 hover:bg-green-50 px-3 py-2 rounded-lg"
                           title="View Purchase History"
                         >
                           <span className="inline-flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M10 2a8 8 0 100 16 8 8 0 000-16zM9 5a1 1 0 112 0v4a1 1 0 01-.293.707l-2 2a1 1 0 11-1.414-1.414L9 8.586V5z" />
                             </svg>
-                            History
+                            View History
                           </span>
                         </button>
                       )}
@@ -475,10 +561,10 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                           <button
                             onClick={() => toggleVisibility(product)}
-                            className={`inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium ring-1 transition ${((product as any).visibleToClients === false ? 'bg-gray-50 text-gray-700 ring-gray-200 hover:bg-gray-100' : 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100')}`}
+                            className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition-all duration-200 ${((product as any).visibleToClients === false ? 'bg-gray-50 text-gray-700 ring-gray-200 hover:bg-gray-100 hover:ring-gray-300' : 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100 hover:ring-amber-300')}`}
                             title={((product as any).visibleToClients === false ? 'Show to Clients' : 'Hide from Clients')}
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
                               {((product as any).visibleToClients === false) ? (
                                 <path d="M10 3C5 3 1.73 7.11 1 10c.73 2.89 4 7 9 7s8.27-4.11 9-7c-.73-2.89-4-7-9-7zm0 12a5 5 0 110-10 5 5 0 010 10z" />
                               ) : (
@@ -489,10 +575,10 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                           </button>
                           <button
                             onClick={() => handleEditProduct(product)}
-                            className="inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-blue-700 hover:text-blue-900 ring-1 ring-blue-200 hover:bg-blue-50"
+                            className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-semibold text-blue-700 hover:text-blue-900 ring-1 ring-blue-200 hover:bg-blue-50 hover:ring-blue-300 transition-all duration-200"
                             title="Edit Product"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
                               <path d="M13.586 3.586a2 2 0 112.828 2.828l-8.95 8.95a1 1 0 01-.464.263l-3 0.75a1 1 0 01-1.213-1.213l.75-3a1 1 0 01.263-.464l8.95-8.95z" />
                               <path d="M5 13l2 2" />
                             </svg>
@@ -501,10 +587,10 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                           {userIsAdmin && (
                             <button
                               onClick={() => handleDeleteProduct(product.id)}
-                              className="inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium text-red-700 hover:text-red-900 ring-1 ring-red-200 hover:bg-red-50"
+                              className="inline-flex items-center px-3 py-2 rounded-lg text-sm font-semibold text-red-700 hover:text-red-900 ring-1 ring-red-200 hover:bg-red-50 hover:ring-red-300 transition-all duration-200"
                               title="Delete Product"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 100 2h12a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM5 8a1 1 0 011-1h8a1 1 0 011 1v7a2 2 0 01-2 2H7a2 2 0 01-2-2V8z" clipRule="evenodd" />
                               </svg>
                               Delete
@@ -515,10 +601,13 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                           <button
                             onClick={() => addToCart(product)}
-                            className="px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 shadow inline-flex items-center text-sm font-medium w-full sm:w-auto justify-center"
+                            className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-700 text-white hover:from-emerald-700 hover:to-emerald-800 shadow-lg hover:shadow-xl transition-all duration-200 inline-flex items-center text-sm font-semibold w-full sm:w-auto justify-center transform hover:-translate-y-0.5"
                             title="Add to Cart"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M3 3a1 1 0 000 2h1l1.2 6A2 2 0 007.18 13h6.64a2 2 0 001.98-1.6l1-5A1 1 0 0015.82 5H6.2l-.2-1A2 2 0 004.05 2H3z"/><path d="M7 16a2 2 0 11-4 0 2 2 0 014 0zm10 2a2 2 0 10-4 0 2 2 0 004 0z"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M3 3a1 1 0 000 2h1l1.2 6A2 2 0 007.18 13h6.64a2 2 0 001.98-1.6l1-5A1 1 0 0015.82 5H6.2l-.2-1A2 2 0 004.05 2H3z"/>
+                              <path d="M7 16a2 2 0 11-4 0 2 2 0 014 0zm10 2a2 2 0 10-4 0 2 2 0 004 0z"/>
+                            </svg>
                             Add to Cart
                           </button>
                         </div>
@@ -531,10 +620,20 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
           )}
 
           {filteredProducts.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">🗂️</div>
-              <div className="font-medium text-gray-700">No products found</div>
-              <div className="text-sm">Try adjusting your search terms.</div>
+            <div className="text-center py-16 px-6">
+              <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center mb-4">
+                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M9 5l8 4" />
+                </svg>
+              </div>
+              <div className="text-xl font-bold text-gray-900 mb-2">No products found</div>
+              <div className="text-sm text-gray-600 mb-4">Try adjusting your search terms or check if products are available.</div>
+              <div className="inline-flex items-center px-4 py-2 rounded-lg bg-gray-50 text-gray-700 border border-gray-200">
+                <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <span className="text-sm font-medium">Use the search bar above to find products</span>
+              </div>
             </div>
           )}
         </div>
@@ -555,18 +654,35 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
 
       {/* Import Excel Modal */}
       {userIsAdmin && showImportModal && (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
-          <div className="bg-white w-full max-w-md rounded shadow-lg p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold">Import Products from Excel/CSV</h3>
-              <button onClick={() => setShowImportModal(false)} className="text-gray-600 hover:text-gray-800">✕</button>
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-200">
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-100">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Import Products</h3>
+                  <p className="text-sm text-gray-600">Upload Excel/CSV file</p>
+                </div>
+              </div>
+              <button onClick={() => setShowImportModal(false)} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-2 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <div className="space-y-3">
-              <p className="text-sm text-gray-600">Upload a .xlsx/.xls/.csv file. Columns supported: <span className="font-mono">OEM, Quantity</span>. We create/update by OEM as itemNumber and set stock to Quantity.</p>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Upload a <strong>.xlsx/.xls/.csv</strong> file. Required columns: <span className="font-mono bg-gray-100 px-2 py-1 rounded text-xs">OEM, Quantity</span>.
+                We create/update products by OEM as itemNumber and set stock to Quantity.
+              </p>
               <div className="flex items-center justify-between">
                 <button
                   type="button"
-                  className="px-3 py-2 text-sm rounded border hover:bg-gray-50"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 inline-flex items-center"
                   onClick={() => {
                     try {
                       const aoa: any[][] = [];
@@ -581,7 +697,12 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                       alert('Failed to generate template');
                     }
                   }}
-                >Download Template</button>
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download Template
+                </button>
                 <span className="text-xs text-gray-500">Tip: Fill OEM (item number) and Quantity.</span>
               </div>
               <input
@@ -602,7 +723,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                   }
                   e.currentTarget.value = '';
                 }}
-                className="w-full border rounded px-3 py-2"
+                className="w-full border border-gray-200 rounded-lg px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               {importing && <div className="text-sm text-gray-700">Uploading and processing…</div>}
               <div className="text-xs text-gray-500">Tip: For very large files, keep this tab open until completion.</div>
@@ -662,35 +783,52 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                   }
                   e.currentTarget.value = '';
                 }}
-                className="w-full border rounded px-3 py-2"
+                className="w-full border border-gray-200 rounded-lg px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               {invoiceApplying && <div className="text-sm text-gray-700">Processing…</div>}
               {invoicePreview.length > 0 && (
-                <div className="max-h-72 overflow-y-auto border rounded">
+                <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg shadow-sm">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50 sticky top-0">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Item</th>
-                        <th className="px-3 py-2 text-left">Name</th>
-                        <th className="px-3 py-2 text-right">Qty</th>
-                        <th className="px-3 py-2 text-center">Paid</th>
-                        <th className="px-3 py-2 text-center">Matched</th>
-                        <th className="px-3 py-2 text-right">Current</th>
-                        <th className="px-3 py-2 text-right">New</th>
-                        <th className="px-3 py-2 text-left">Note</th>
+                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100/50 sticky top-0">
+                      <tr className="border-b border-gray-200">
+                        <th className="px-4 py-3 text-left text-sm font-bold text-gray-800 bg-gradient-to-br from-blue-50 to-blue-100/50 border-r-2 border-blue-200">
+                          <div className="flex items-center space-x-2">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                            </svg>
+                            <span>Item Number</span>
+                          </div>
+                        </th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Qty</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Paid</th>
+                        <th className="px-4 py-3 text-center text-sm font-semibold text-gray-700">Matched</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">Current</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold text-gray-700">New</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Note</th>
                       </tr>
                     </thead>
                     <tbody>
                       {invoicePreview.map((r, idx) => (
-                        <tr key={idx} className="border-t">
-                          <td className="px-3 py-1 font-mono">{r.itemNumber}</td>
-                          <td className="px-3 py-1">{r.name || '-'}</td>
-                          <td className="px-3 py-1 text-right">{r.quantity}</td>
-                          <td className="px-3 py-1 text-center">{r.paid ? 'Yes' : 'No'}</td>
-                          <td className="px-3 py-1 text-center">{r.matched ? '✓' : '✗'}</td>
-                          <td className="px-3 py-1 text-right">{typeof r.currentStock === 'number' ? r.currentStock : '-'}</td>
-                          <td className="px-3 py-1 text-right">{typeof r.newStock === 'number' ? r.newStock : '-'}</td>
-                          <td className="px-3 py-1">{r.reason || ''}</td>
+                        <tr key={idx} className="border-t border-gray-100 hover:bg-gray-50 transition-colors duration-200">
+                          <td className="px-4 py-2 font-mono font-bold text-blue-900 bg-gradient-to-r from-blue-50/50 to-transparent">
+                            {r.itemNumber}
+                          </td>
+                          <td className="px-4 py-2 font-medium">{r.name || '-'}</td>
+                          <td className="px-4 py-2 text-right font-semibold">{r.quantity}</td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${r.paid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {r.paid ? 'Yes' : 'No'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${r.matched ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              {r.matched ? '✓' : '✗'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-right font-medium">{typeof r.currentStock === 'number' ? r.currentStock : '-'}</td>
+                          <td className="px-4 py-2 text-right font-medium">{typeof r.newStock === 'number' ? r.newStock : '-'}</td>
+                          <td className="px-4 py-2 font-medium">{r.reason || ''}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -700,7 +838,12 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
               <div className="text-xs text-gray-500">We match by OEM/Item Number to product `itemNumber`.</div>
             </div>
             <div className="mt-4 text-right">
-              <button onClick={() => { setShowInvoiceModal(false); setInvoicePreview([]); setInvoiceFile(null); }} className="px-4 py-2 rounded border hover:bg-gray-50 mr-2">Close</button>
+              <button
+                onClick={() => { setShowInvoiceModal(false); setInvoicePreview([]); setInvoiceFile(null); }}
+                className="px-6 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 font-semibold text-gray-700 mr-3 shadow-sm hover:shadow-md"
+              >
+                Close
+              </button>
               <button
                 disabled={invoicePreview.length === 0 || !invoiceFile}
                 onClick={async () => {
@@ -720,7 +863,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                     }
                   } catch {}
                 }}
-                className="px-4 py-2 rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
                 Apply Paid Rows
               </button>
@@ -746,7 +889,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
                     <div>
                       <div className="font-medium text-gray-900">{ci.name}</div>
                       <div className="text-xs text-gray-500">Item #{ci.itemNumber}</div>
-                      <div className="text-sm text-gray-700">{formatPriceForUser(ci.price)}</div>
+                      <div className="text-sm text-gray-700">{formatPriceForUser(ci.price).display}</div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <input
@@ -766,7 +909,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             )}
             <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-gray-700">Total items: {cartCount}</div>
-              <div className="text-lg font-semibold text-gray-900">Total: {formatPriceForUser(cartTotal)}</div>
+              <div className="text-lg font-semibold text-gray-900">Total: {formatPriceForUser(cartTotal).display}</div>
             </div>
             <div className="mt-4 text-right">
               <button onClick={() => setCartOpen(false)} className="px-4 py-2 rounded border hover:bg-gray-50 mr-2">Close</button>
@@ -837,41 +980,59 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose, u
     }),
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const productData: any = {
-      itemNumber: formData.itemNumber,
-      name: formData.name,
-    };
-
-    // Only include description if it's not empty
-    if (formData.description && formData.description.trim()) {
-      productData.description = formData.description;
-    }
-
-    // Admin-only fields
-    if (userRole === 'admin') {
-      if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
-        productData.sellingPrice = formData.sellingPrice;
-      }
-      if (typeof formData.stock === 'number' && !Number.isNaN(formData.stock)) {
-        productData.stock = formData.stock;
-      }
-      if (typeof formData.reorderLevel === 'number' && !Number.isNaN(formData.reorderLevel)) {
-        productData.reorderLevel = formData.reorderLevel;
-      }
-      productData.visibleToClients = !!formData.visibleToClients;
-    }
-
-    if (product) {
-      productData.id = product.id;
-    }
-    onSave(productData);
-  };
-
-  const [uploading, setUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUploading(true);
+    
+    try {
+      const productData: any = {
+        itemNumber: formData.itemNumber,
+        name: formData.name,
+      };
+
+      if (formData.description && formData.description.trim()) {
+        productData.description = formData.description;
+      }
+
+      if (userRole === 'admin') {
+        if (typeof formData.sellingPrice === 'number' && !Number.isNaN(formData.sellingPrice)) {
+          productData.sellingPrice = formData.sellingPrice;
+        }
+        if (typeof formData.stock === 'number' && !Number.isNaN(formData.stock)) {
+          productData.stock = formData.stock;
+        }
+        if (typeof formData.reorderLevel === 'number' && !Number.isNaN(formData.reorderLevel)) {
+          productData.reorderLevel = formData.reorderLevel;
+        }
+        productData.visibleToClients = !!formData.visibleToClients;
+      }
+
+      if (product) {
+        productData.id = product.id;
+      }
+
+      // Include image file in the payload
+      if (selectedFile) {
+        productData.imageFile = selectedFile;
+        console.log('ProductModal: Including image file in payload:', selectedFile.name, selectedFile.size);
+      } else {
+        console.log('ProductModal: No image file selected');
+      }
+
+      console.log('ProductModal: Sending product data:', productData);
+      
+      // Save the product (with image file included)
+      onSave(productData);
+    } catch (error) {
+      console.error('Error saving product:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type, checked } = e.target as HTMLInputElement;
@@ -881,152 +1042,257 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onSave, onClose, u
     }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    console.log('ProductModal: File selected:', file);
+    if (file) {
+      console.log('ProductModal: Setting selected file:', file.name, file.size);
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    } else {
+      console.log('ProductModal: No file selected');
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-10 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-        <div className="mt-3">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            {product ? 'Edit Product' : 'Add New Product'}
-          </h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {product && (
-              <div className="mb-2">
-                <label className="block text-sm font-medium text-gray-700">Product Image</label>
-                <div className="flex items-center space-x-3 mt-1">
-                  {(previewUrl || (product as any)?.images?.[0]) ? (
-                    <img
-                      src={previewUrl || `${getApiOrigin().replace(/\/api\/?$/, '')}${(product as any)?.images?.[0]}`}
-                      alt={product.name}
-                      className="h-12 w-12 rounded object-cover border"
-                    />
-                  ) : (
-                    <div className="h-12 w-12 rounded bg-gray-100 border flex items-center justify-center text-xs text-gray-500">No image</div>
-                  )}
-                  <label className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">
-                    {uploading ? 'Uploading...' : 'Change Image'}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file || !product) return;
-                        setSelectedFile(file);
-                        const local = URL.createObjectURL(file);
-                        setPreviewUrl(local);
-                        setUploading(true);
-                        const imgs = await uploadProductImage(product.id, file);
-                        setUploading(false);
-                        if (imgs && imgs.length > 0) {
-                          // no-op; list will refresh on save/close
-                        } else {
-                          alert('Failed to upload image');
-                          setPreviewUrl(null);
-                        }
-                        e.currentTarget.value = '';
-                      }}
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-2xl">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Item Number</label>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {product ? '✏️ Edit Product' : '➕ Add New Product'}
+              </h2>
+              <p className="text-gray-600 mt-1">
+                {product ? 'Update product details' : 'Create a new product'}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Basic Info */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Basic Information</h3>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Item Number <span className="text-red-500">*</span>
+              </label>
               <input
                 name="itemNumber"
-                className="mt-1 block w-full border rounded px-3 py-2"
+                required
+                placeholder="e.g., PROD-001"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={formData.itemNumber}
                 onChange={handleChange}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Product Name <span className="text-red-500">*</span>
+              </label>
               <input
                 name="name"
-                className="mt-1 block w-full border rounded px-3 py-2"
+                required
+                placeholder="e.g., Premium Widget"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={formData.name}
                 onChange={handleChange}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description
+              </label>
               <textarea
                 name="description"
-                className="mt-1 block w-full border rounded px-3 py-2"
+                rows={3}
+                placeholder="Describe your product..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
                 value={formData.description}
                 onChange={handleChange}
               />
             </div>
-            {userRole === 'admin' && (
-              <>
+          </div>
+
+          {/* Product Image Upload */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Product Image</h3>
+            
+            <div className="flex items-center space-x-6">
+              {/* Image Preview */}
+              <div className="flex-shrink-0">
+                {previewUrl ? (
+                  <div className="relative">
+                    <img
+                      src={previewUrl}
+                      alt="Product preview"
+                      className="h-24 w-24 rounded-lg object-cover border-2 border-gray-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewUrl(null);
+                        setSelectedFile(null);
+                      }}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : product && (product as any)?.images?.[0] ? (
+                  <img
+                    src={`${getApiOrigin().replace(/\/api\/?$/, '')}${(product as any).images[0]}`}
+                    alt={product.name}
+                    className="h-24 w-24 rounded-lg object-cover border-2 border-gray-200"
+                  />
+                ) : (
+                  <div className="h-24 w-24 rounded-lg bg-gray-100 border-2 border-gray-200 flex items-center justify-center">
+                    <span className="text-2xl text-gray-400">📷</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Upload Button */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Product Image
+                </label>
+                <div className="flex items-center space-x-4">
+                  <label className="cursor-pointer">
+                    <div className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span>{uploading ? 'Uploading...' : 'Choose Image'}</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                  </label>
+                  {previewUrl && (
+                    <span className="text-sm text-green-600 flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                      Image selected
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Recommended: JPG, PNG, or WebP. Max size: 5MB
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Admin Settings */}
+          {userRole === 'admin' && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Admin Settings</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Selling Price</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Selling Price (¥)
+                  </label>
                   <input
                     name="sellingPrice"
                     type="number"
                     step="0.01"
                     min="0"
-                    className="mt-1 block w-full border rounded px-3 py-2"
+                    placeholder="0.00"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={typeof formData.sellingPrice === 'number' ? String(formData.sellingPrice) : ''}
                     onChange={handleChange}
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Stock</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Stock Quantity
+                  </label>
                   <input
                     name="stock"
                     type="number"
                     step="1"
                     min="0"
-                    className="mt-1 block w-full border rounded px-3 py-2"
+                    placeholder="0"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     value={typeof formData.stock === 'number' ? String(formData.stock) : ''}
                     onChange={handleChange}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Reorder Level</label>
-                  <input
-                    name="reorderLevel"
-                    type="number"
-                    step="1"
-                    min="0"
-                    className="mt-1 block w-full border rounded px-3 py-2"
-                    value={typeof formData.reorderLevel === 'number' ? String(formData.reorderLevel) : ''}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    id="visibleToClients"
-                    name="visibleToClients"
-                    type="checkbox"
-                    checked={!!formData.visibleToClients}
-                    onChange={handleChange}
-                    className="h-4 w-4"
-                  />
-                  <label htmlFor="visibleToClients" className="text-sm font-medium text-gray-700">Visible to Clients</label>
-                </div>
-              </>
-            )}
-            <div className="flex items-center justify-end space-x-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 rounded border hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!formData.itemNumber || !formData.name}
-                title={!formData.itemNumber || !formData.name ? 'Item Number and Name are required' : 'Save product'}
-              >
-                Save
-              </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reorder Level
+                </label>
+                <input
+                  name="reorderLevel"
+                  type="number"
+                  step="1"
+                  min="0"
+                  placeholder="0"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={typeof formData.reorderLevel === 'number' ? String(formData.reorderLevel) : ''}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <input
+                  id="visibleToClients"
+                  name="visibleToClients"
+                  type="checkbox"
+                  checked={!!formData.visibleToClients}
+                  onChange={handleChange}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="visibleToClients" className="text-sm font-medium text-gray-700">
+                  Visible to Clients
+                </label>
+              </div>
             </div>
-          </form>
-        </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={!formData.itemNumber || !formData.name}
+            >
+              {product ? 'Update Product' : 'Create Product'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
