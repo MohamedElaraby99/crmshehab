@@ -502,26 +502,61 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                           ${order.totalAmount !== undefined && order.totalAmount !== null ? Number(order.totalAmount).toFixed(2) : '0.00'}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="space-y-1">
-                          {order.items && order.items.length > 0 ? (
-                            order.items.map((item, index) => (
-                              <div key={index} className="flex items-center">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  item.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                  item.status === 'shipped' ? 'bg-blue-100 text-blue-800' :
-                                  item.status === 'delivered' ? 'bg-purple-100 text-purple-800' :
-                                  item.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                                  'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {item.status ? String(item.status).toUpperCase() : 'PENDING'}
+                      <td className="px-6 py-4">
+                        {order.items && order.items.length > 0 ? (
+                          (() => {
+                            // Group items by status
+                            const statusCounts: { [key: string]: number } = {};
+                            order.items.forEach(item => {
+                              const status = item.status || 'pending';
+                              statusCounts[status] = (statusCounts[status] || 0) + 1;
+                            });
+
+                            // Get status color classes
+                            const getStatusColor = (status: string) => {
+                              switch (status.toLowerCase()) {
+                                case 'confirmed':
+                                  return 'bg-green-100 text-green-800';
+                                case 'shipped':
+                                  return 'bg-blue-100 text-blue-800';
+                                case 'delivered':
+                                  return 'bg-purple-100 text-purple-800';
+                                case 'cancelled':
+                                  return 'bg-red-100 text-red-800';
+                                default:
+                                  return 'bg-yellow-100 text-yellow-800';
+                              }
+                            };
+
+                            // If all items have the same status, show single badge
+                            const uniqueStatuses = Object.keys(statusCounts);
+                            if (uniqueStatuses.length === 1) {
+                              const status = uniqueStatuses[0];
+                              return (
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(status)}`}>
+                                  {order.items.length} {String(status).toUpperCase()}
                                 </span>
+                              );
+                            }
+
+                            // Multiple statuses - show compact badges
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {uniqueStatuses.map((status) => (
+                                  <span
+                                    key={status}
+                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(status)}`}
+                                    title={`${statusCounts[status]} items with ${status} status`}
+                                  >
+                                    {statusCounts[status]} {String(status).toUpperCase()}
+                                  </span>
+                                ))}
                               </div>
-                            ))
-                          ) : (
-                            <span className="text-gray-500 text-xs">No items</span>
-                          )}
-                        </div>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-gray-500 text-xs">No items</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -534,41 +569,112 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                           {order.status ? String(order.status).toUpperCase() : 'PENDING'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="space-y-1">
-                          {order.items && order.items.length > 0 ? (
-                            order.items.map((item, index) => (
-                              <div key={index} className="flex items-center">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  (item.priceApprovalStatus || 'pending') === 'approved' ? 'bg-green-100 text-green-800' :
-                                  (item.priceApprovalStatus || 'pending') === 'rejected' ? 'bg-red-100 text-red-800' :
-                                  'bg-yellow-100 text-yellow-800'
-                                }`}>
-                                  {String(item.priceApprovalStatus || 'pending').toUpperCase()}
+                      <td className="px-6 py-4">
+                        {order.items && order.items.length > 0 ? (
+                          (() => {
+                            // Group items by price approval status
+                            const statusCounts: { [key: string]: number } = {};
+                            order.items.forEach(item => {
+                              const status = item.priceApprovalStatus || 'pending';
+                              statusCounts[status] = (statusCounts[status] || 0) + 1;
+                            });
+
+                            // Get status color classes
+                            const getStatusColor = (status: string) => {
+                              switch (status.toLowerCase()) {
+                                case 'approved':
+                                  return 'bg-green-100 text-green-800';
+                                case 'rejected':
+                                  return 'bg-red-100 text-red-800';
+                                default:
+                                  return 'bg-yellow-100 text-yellow-800';
+                              }
+                            };
+
+                            // If all items have the same status, show single badge
+                            const uniqueStatuses = Object.keys(statusCounts);
+                            if (uniqueStatuses.length === 1) {
+                              const status = uniqueStatuses[0];
+                              return (
+                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(status)}`}>
+                                  {order.items.length} {String(status).toUpperCase()}
                                 </span>
+                              );
+                            }
+
+                            // Multiple statuses - show compact badges
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {uniqueStatuses.map((status) => (
+                                  <span
+                                    key={status}
+                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(status)}`}
+                                    title={`${statusCounts[status]} items with ${status} approval status`}
+                                  >
+                                    {statusCounts[status]} {String(status).toUpperCase()}
+                                  </span>
+                                ))}
                               </div>
-                            ))
-                          ) : (
-                            <span className="text-gray-500 text-xs">No items</span>
-                          )}
-                        </div>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-gray-500 text-xs">No items</span>
+                        )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="space-y-1">
-                          {order.items && order.items.length > 0 ? (
-                            order.items.map((item, index) => (
-                              <div key={index} className="flex items-center">
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  item.stockAdjusted ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {item.stockAdjusted ? 'YES' : 'NO'}
+                      <td className="px-6 py-4">
+                        {order.items && order.items.length > 0 ? (
+                          (() => {
+                            // Count adjusted and not adjusted items
+                            let adjustedCount = 0;
+                            let notAdjustedCount = 0;
+                            order.items.forEach(item => {
+                              if (item.stockAdjusted) {
+                                adjustedCount++;
+                              } else {
+                                notAdjustedCount++;
+                              }
+                            });
+
+                            // If all items have the same status, show single badge
+                            if (adjustedCount === 0) {
+                              return (
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                  {order.items.length} NO
                                 </span>
+                              );
+                            } else if (notAdjustedCount === 0) {
+                              return (
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                  {order.items.length} YES
+                                </span>
+                              );
+                            }
+
+                            // Mixed statuses - show both badges
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {adjustedCount > 0 && (
+                                  <span
+                                    className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800"
+                                    title={`${adjustedCount} items adjusted`}
+                                  >
+                                    {adjustedCount} YES
+                                  </span>
+                                )}
+                                {notAdjustedCount > 0 && (
+                                  <span
+                                    className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800"
+                                    title={`${notAdjustedCount} items not adjusted`}
+                                  >
+                                    {notAdjustedCount} NO
+                                  </span>
+                                )}
                               </div>
-                            ))
-                          ) : (
-                            <span className="text-gray-500 text-xs">No items</span>
-                          )}
-                        </div>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-gray-500 text-xs">No items</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -886,7 +992,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+      <div className="relative top-10 mx-auto p-5 border w-[95%] max-w-[95%] shadow-lg rounded-md bg-white my-8">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-bold text-gray-900">Order Details</h3>
           <button
@@ -941,7 +1047,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
         <div className="mt-6">
           <h4 className="text-md font-semibold text-gray-900 mb-3">Order Items</h4>
           <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Number</th>
@@ -1023,6 +1130,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
                 )}
               </tbody>
             </table>
+            </div>
           </div>
           {order.items && order.items.length > 0 && (
             <div className="mt-4 text-right">

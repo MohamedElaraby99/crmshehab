@@ -91,8 +91,12 @@ const vendorSchema = new mongoose.Schema({
   }
 });
 
-// Update updatedAt field
+// Normalize email: convert empty strings to null for sparse index
 vendorSchema.pre('save', function(next) {
+  // Convert empty email strings to null to work with sparse unique index
+  if (this.email === '' || (typeof this.email === 'string' && this.email.trim() === '')) {
+    this.email = null;
+  }
   this.updatedAt = Date.now();
   next();
 });

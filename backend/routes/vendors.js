@@ -127,9 +127,12 @@ router.post('/', [
 
     const { name, contactPerson, email, phone, address, city, country, status = 'active' } = req.body;
 
+    // Normalize email: convert empty strings to null/undefined for sparse index
+    const normalizedEmail = email && email.trim() !== '' ? email.trim() : null;
+
     // Check if email already exists (only when provided)
-    if (email && email.trim() !== '') {
-      const existingVendor = await Vendor.findOne({ email });
+    if (normalizedEmail) {
+      const existingVendor = await Vendor.findOne({ email: normalizedEmail });
       if (existingVendor) {
         return res.status(400).json({
           success: false,
@@ -168,7 +171,7 @@ router.post('/', [
     const vendor = new Vendor({
       name,
       contactPerson,
-      email,
+      email: normalizedEmail,
       phone,
       address,
       city,
@@ -245,9 +248,15 @@ router.put('/:id', [
       });
     }
 
+    // Normalize email: convert empty strings to null/undefined for sparse index
+    let normalizedEmail = req.body.email;
+    if (normalizedEmail !== undefined) {
+      normalizedEmail = normalizedEmail && normalizedEmail.trim() !== '' ? normalizedEmail.trim() : null;
+    }
+
     // Check if email is being changed and if it already exists
-    if (req.body.email && req.body.email !== vendor.email) {
-      const existingVendor = await Vendor.findOne({ email: req.body.email });
+    if (normalizedEmail !== undefined && normalizedEmail !== null && normalizedEmail !== vendor.email) {
+      const existingVendor = await Vendor.findOne({ email: normalizedEmail });
       if (existingVendor) {
         return res.status(400).json({
           success: false,
@@ -262,7 +271,12 @@ router.put('/:id', [
     
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
-        updateData[field] = req.body[field];
+        // Special handling for email field
+        if (field === 'email') {
+          updateData[field] = normalizedEmail;
+        } else {
+          updateData[field] = req.body[field];
+        }
       }
     });
 
