@@ -19,7 +19,7 @@ export const ORDER_FIELD_CONFIGS: OrderFieldConfig[] = [
     name: 'itemNumber',
     label: 'Item Number',
     type: 'text',
-    required: true,
+    required: false,
     editableBy: 'both',
     visibleTo: 'both',
     placeholder: 'e.g., 68240575AB(iron)'
@@ -28,7 +28,7 @@ export const ORDER_FIELD_CONFIGS: OrderFieldConfig[] = [
     name: 'productName',
     label: 'Product Name',
     type: 'text',
-    required: true,
+    required: false,
     editableBy: 'both',
     visibleTo: 'both',
     placeholder: 'Product description'
@@ -37,7 +37,7 @@ export const ORDER_FIELD_CONFIGS: OrderFieldConfig[] = [
     name: 'quantity',
     label: 'Quantity',
     type: 'number',
-    required: true,
+    required: false,
     editableBy: 'both',
     visibleTo: 'both',
     validation: { min: 1 }

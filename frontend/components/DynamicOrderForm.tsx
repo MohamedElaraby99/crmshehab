@@ -222,15 +222,18 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
       ? fieldsToValidate.filter(f =>
           f.name !== 'confirmFormShehab'
         )
-      : fieldsToValidate.filter(f =>
-          // For vendor orders, exclude item-specific fields that come from table items
-          // Also exclude the overall 'price' field since vendors use unitPrice per item
-          // and any admin-only fields
-          f.name !== 'unitPrice' &&
-          f.name !== 'totalPrice' &&
-          f.name !== 'price' &&
-          f.name !== 'confirmFormShehab'
-        );
+      : fieldsToValidate.filter(f => {
+          const vendorExcludedFields = new Set([
+            'unitPrice',
+            'totalPrice',
+            'price',
+            'confirmFormShehab',
+            'itemNumber',
+            'productName',
+            'quantity'
+          ]);
+          return !vendorExcludedFields.has(f.name);
+        });
 
     console.log('DynamicOrderForm: Fields to validate:', finalFields.map(f => f.name));
     
@@ -906,25 +909,6 @@ const DynamicOrderForm: React.FC<DynamicOrderFormProps> = ({
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {visibleFields
                     .filter(field => field.editableBy === 'vendor')
-                    .map(field => renderField(field))}
-                </div>
-              </div>
-            )}
-
-            {/* Shared Fields */}
-            {visibleFields.some(field => field.editableBy === 'both') && (
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 p-6 rounded-xl border border-purple-200/60">
-                <div className="flex items-center space-x-3 mb-6">
-                  <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <h4 className="text-lg font-semibold text-purple-900">Shared Fields</h4>
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {visibleFields
-                    .filter(field => field.editableBy === 'both')
                     .map(field => renderField(field))}
                 </div>
               </div>
