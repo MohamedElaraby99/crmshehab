@@ -14,7 +14,7 @@ interface OrderTableProps {
 }
 
 const OrderTable: React.FC<OrderTableProps> = ({ orders, onUpdateOrder, onDeleteOrder, onViewHistory, userIsAdmin, currencySymbol: currencySymbolOverride }) => {
-  const currencySymbol = currencySymbolOverride ?? (userIsAdmin ? '¥' : 'SR ');
+  const currencySymbol = currencySymbolOverride ?? '¥';
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');

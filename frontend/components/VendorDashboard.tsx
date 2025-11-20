@@ -51,8 +51,15 @@ const VendorDashboard: React.FC<VendorDashboardProps> = ({ user, onLogout, onUpd
         getAllProducts()
       ]);
       setVendor(vendorData || user);
+      const normalizedVendorId = (vendorId: any) => {
+        if (!vendorId) return '';
+        if (typeof vendorId === 'string') return vendorId;
+        return vendorId.id || vendorId._id || '';
+      };
+
       setOrders(vendorOrders);
-      setAllOrders(allOrdersData);
+      const vendorSpecificOrders = (allOrdersData || []).filter((order: any) => normalizedVendorId(order?.vendorId) === user.id);
+      setAllOrders(vendorSpecificOrders);
       setProducts(allProducts);
 
       // Build product image map

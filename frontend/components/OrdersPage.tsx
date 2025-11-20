@@ -6,6 +6,11 @@ import DynamicOrderForm from './DynamicOrderForm';
 import FieldConfigManager from './FieldConfigManager';
 import { OrderFieldConfig } from '../data/orderFieldConfig';
 
+const formatCurrency = (value: number | undefined | null) => {
+  const num = Number(value ?? 0);
+  return `¥${num.toFixed(2)}`;
+};
+
 interface OrdersPageProps {
   onLogout: () => void;
 }
@@ -477,13 +482,13 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                           {order.items && order.items.length > 0 ? (
                             order.items.length === 1 ? (
                               // Single item - show unit price
-                              `$${order.items[0].unitPrice ? order.items[0].unitPrice.toFixed(2) : '0.00'}`
+                              formatCurrency(order.items[0].unitPrice)
                             ) : (
                               // Multiple items - show average
-                              `$${(order.items.reduce((sum, item) => sum + (item.unitPrice || 0), 0) / order.items.length).toFixed(2)} avg`
+                              `${formatCurrency(order.items.reduce((sum, item) => sum + (item.unitPrice || 0), 0) / order.items.length)} avg`
                             )
                           ) : (
-                            '$0.00'
+                            formatCurrency(0)
                           )}
                         </div>
                       </td>
@@ -491,15 +496,15 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                         <div className="text-sm font-medium text-gray-900">
                           {order.items && order.items.length > 0 ? (
                             // Calculate total for all items
-                            `$${order.items.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0).toFixed(2)}`
+                            formatCurrency(order.items.reduce((sum, item) => sum + (item.quantity * (item.unitPrice || 0)), 0))
                           ) : (
-                            '$0.00'
+                            formatCurrency(0)
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
-                          ${order.totalAmount !== undefined && order.totalAmount !== null ? Number(order.totalAmount).toFixed(2) : '0.00'}
+                          {formatCurrency(order.totalAmount)}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -681,13 +686,13 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                           {order.items && order.items.length > 0 ? (
                             order.items.length === 1 ? (
                               // Single item - show item price
-                              `$${(order.items[0].price || 0).toFixed(2)}`
+                              formatCurrency(order.items[0].price)
                             ) : (
                               // Multiple items - show average
-                              `$${(order.items.reduce((sum, item) => sum + (item.price || 0), 0) / order.items.length).toFixed(2)} avg`
+                              `${formatCurrency(order.items.reduce((sum, item) => sum + (item.price || 0), 0) / order.items.length)} avg`
                             )
                           ) : (
-                            '$0.00'
+                            formatCurrency(0)
                           )}
                         </div>
                       </td>
@@ -695,9 +700,9 @@ const OrdersPage: React.FC<OrdersPageProps> = ({ onLogout }) => {
                         <div className="text-sm font-medium text-gray-900">
                           {order.items && order.items.length > 0 ? (
                             // Calculate total for all items using item totalAmount
-                            `$${order.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0).toFixed(2)}`
+                            formatCurrency(order.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0))
                           ) : (
-                            '$0.00'
+                            formatCurrency(0)
                           )}
                         </div>
                       </td>
@@ -1025,7 +1030,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
               <div><span className="font-medium">Vendor:</span> {getVendorName()}</div>
               <div><span className="font-medium">Order Date:</span> {formatDate(order.orderDate)}</div>
               <div><span className="font-medium">Invoice Number:</span> {order.invoiceNumber || 'N/A'}</div>
-              <div><span className="font-medium">Total Amount:</span> ${order.totalAmount || 0}</div>
+              <div><span className="font-medium">Total Amount:</span> {formatCurrency(order.totalAmount)}</div>
             </div>
           </div>
 
@@ -1037,7 +1042,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
               <div><span className="font-medium">Shipping to Agent:</span> {order.shippingDateToAgent || 'N/A'}</div>
               <div><span className="font-medium">Shipping to Saudi:</span> {order.shippingDateToSaudi || 'N/A'}</div>
               <div><span className="font-medium">Arrival Date:</span> {order.arrivalDate || 'N/A'}</div>
-              <div><span className="font-medium">Transfer Amount:</span> ${order.transferAmount || 0}</div>
+              <div><span className="font-medium">Transfer Amount:</span> {formatCurrency(order.transferAmount)}</div>
               <div><span className="font-medium">Notes:</span> {order.notes || 'No notes'}</div>
             </div>
           </div>
@@ -1078,10 +1083,10 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
                         {item.quantity}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${item.unitPrice || 0}
+                        {formatCurrency(item.unitPrice)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${(item.quantity * (item.unitPrice || 0)).toFixed(2)}
+                        {formatCurrency(item.quantity * (item.unitPrice || 0))}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -1111,10 +1116,10 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({ order, vendors, p
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${(item.price || 0).toFixed(2)}
+                        {formatCurrency(item.price)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${(item.totalAmount || 0).toFixed(2)}
+                        {formatCurrency(item.totalAmount)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.notes || 'No notes'}

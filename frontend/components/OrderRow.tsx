@@ -250,7 +250,7 @@ const OrderRow: React.FC<OrderRowProps> = ({
   rowNumber, 
   columns, 
   isEven,
-  currencySymbol = '$' 
+  currencySymbol = '¥' 
 }) => {
   const [editableOrder, setEditableOrder] = useState<Order>(order);
   const [fieldConfigs, setFieldConfigs] = useState<OrderFieldConfig[]>(ORDER_FIELD_CONFIGS);
