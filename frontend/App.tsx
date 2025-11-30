@@ -6,20 +6,15 @@ import VendorDashboard from './components/VendorDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import VendorsPage from './components/VendorsPage';
 import ProductsPage from './components/ProductsPage';
-import ClientDemandsPage from './components/ClientDemandsPage';
-import WhatsAppRecipientsPage from './components/WhatsAppRecipientsPage';
-import WhatsAppWebPage from './components/WhatsAppWebPage';
 import OrdersPage from './components/OrdersPage';
 import Navigation from './components/Navigation';
 import UsersPage from './components/UsersPage';
-import DemandsPage from './components/DemandsPage';
 import { User, Vendor } from './types';
 import { authenticateUser, authenticateVendor, updateVendorByVendor, getCurrentUser, getCurrentVendor, isAuthenticated } from './services/api';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentVendor, setCurrentVendor] = useState<Vendor | null>(null);
-  const [clientMenuOpen, setClientMenuOpen] = useState(false);
 
   const handleLogout = () => {
     setCurrentUser(null);
@@ -182,69 +177,6 @@ const App: React.FC = () => {
     );
   }
 
-  // Client view: show only Products
-  if (currentUser && currentUser.role === 'client') {
-    return (
-      <Router>
-        <div className="min-h-screen bg-gray-100">
-          <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-slate-900 via-gray-800 to-slate-900 shadow-xl backdrop-blur-md border-b border-gray-700/50">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                <div>
-                  <h1 className="text-lg font-bold text-white tracking-tight">Client Portal</h1>
-                  <p className="text-gray-300 text-xs">Browse Products</p>
-                </div>
-              </div>
-              <div className="hidden sm:flex items-center space-x-2">
-                <Link to="/client/products" className={`px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition`}>Browse Products</Link>
-                <Link to="/client/demands" className={`px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition`}>My Demands</Link>
-                <button
-                  onClick={handleLogout}
-                  className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-all duration-200"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Logout
-                </button>
-              </div>
-              {/* Burger for mobile */}
-              <button
-                className="sm:hidden inline-flex items-center justify-center p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700"
-                onClick={() => setClientMenuOpen(v => !v)}
-                aria-label="Open menu"
-              >
-                <span className="sr-only">Open menu</span>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            </div>
-          </header>
-          {/* Mobile menu */}
-          {clientMenuOpen && (
-            <div className="sm:hidden fixed top-16 left-0 right-0 z-40 bg-gray-800 border-b border-gray-700">
-              <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
-                <Link onClick={() => setClientMenuOpen(false)} to="/client/products" className="block px-3 py-2 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700">Browse Products</Link>
-                <Link onClick={() => setClientMenuOpen(false)} to="/client/demands" className="block px-3 py-2 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700">My Demands</Link>
-                <button onClick={() => { setClientMenuOpen(false); handleLogout(); }} className="block w-full text-left px-3 py-2 rounded text-sm text-gray-300 hover:text-white hover:bg-gray-700">Logout</button>
-              </div>
-            </div>
-          )}
-          <div className="h-16"></div>
-          <Routes>
-            <Route path="/" element={<ProductsPage onLogout={handleLogout} forceClient={true} />} />
-            <Route path="/client/products" element={<ProductsPage onLogout={handleLogout} forceClient={true} />} />
-            <Route path="/client/demands" element={<ClientDemandsPage onLogout={handleLogout} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </Router>
-    );
-  }
 
   // Admin/Supplier Dashboard
   return (
@@ -256,9 +188,6 @@ const App: React.FC = () => {
           <Route path="/orders" element={<OrdersPage onLogout={handleLogout} />} />
           <Route path="/vendors" element={<VendorsPage onLogout={handleLogout} />} />
           <Route path="/products" element={<ProductsPage onLogout={handleLogout} />} />
-          <Route path="/demands" element={<DemandsPage onLogout={handleLogout} />} />
-          <Route path="/whatsapp" element={<WhatsAppRecipientsPage onLogout={handleLogout} />} />
-          <Route path="/whatsapp-web" element={<WhatsAppWebPage onLogout={handleLogout} />} />
           <Route path="/users" element={<UsersPage onLogout={handleLogout} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

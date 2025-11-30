@@ -73,7 +73,7 @@ export interface Order {
 export interface User {
   id: string;
   username: string;
-  role?: 'admin' | 'vendor' | 'client';
+  role?: 'admin' | 'vendor';
   password?: string; // Should not be stored long term
 }
 
@@ -121,13 +121,4 @@ export interface Vendor {
   updatedAt: string;
   lastOnlineAt?: string | null;
   lastOrdersReadAt?: string | null;
-}
-
-export interface Demand {
-  id: string;
-  productId: { id: string; name?: string; itemNumber?: string } | string;
-  userId: string | { _id: string; username?: string };
-  quantity: number;
-  notes?: string;
-  createdAt: string;
 }

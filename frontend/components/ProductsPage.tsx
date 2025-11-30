@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Product, ProductPurchase, User } from '../types';
-import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, getMyDemands, importProductsFromExcel, importInvoiceFromExcel } from '../services/api';
-import { createDemand } from '../services/api';
+import { createProduct, deleteProduct, getAllOrders, getAllProducts, getVisibleProducts, getApiOrigin, getProductPurchases, getCurrentUser, updateProduct, uploadProductImage, getSocket, importProductsFromExcel, importInvoiceFromExcel, sendProductsToExternalApp, createOrder } from '../services/api';
 import ProductHistoryModal from './ProductHistoryModal';
 
 interface ProductsPageProps {
@@ -21,7 +20,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [cartItems, setCartItems] = useState<Array<{ id: string; name: string; itemNumber: string; price: number; quantity: number }>>([]);
-  const [myDemands, setMyDemands] = useState<any[]>([]);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imagePreviewTitle, setImagePreviewTitle] = useState<string>('');
   const [importing, setImporting] = useState(false);
@@ -30,9 +28,11 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const [invoicePreview, setInvoicePreview] = useState<Array<{ itemNumber: string; quantity: number; paid: boolean; matched: boolean; name?: string; currentStock?: number; newStock?: number; reason?: string }>>([]);
   const [invoiceApplying, setInvoiceApplying] = useState(false);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [sendingProducts, setSendingProducts] = useState(false);
+  const [lastExternalSync, setLastExternalSync] = useState<{ total: number; exportedAt: string } | null>(null);
 
   const userIsAdmin = useMemo(() => (currentUser?.role === 'admin'), [currentUser]);
-  const userIsClient = useMemo(() => (forceClient ? true : currentUser?.role === 'client'), [currentUser, forceClient]);
+  const userIsClient = false; // Client role removed
   const userIsVendor = useMemo(() => (currentUser?.role === 'vendor'), [currentUser]);
 
 
@@ -71,7 +71,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
     socket.on('products:created', onAnyChange);
     socket.on('products:updated', onAnyChange);
     socket.on('products:deleted', onAnyChange);
-    socket.on('demands:created', onAnyChange);
     return () => {
       socket.off('orders:created', onAnyChange);
       socket.off('orders:updated', onAnyChange);
@@ -79,7 +78,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
       socket.off('products:created', onAnyChange);
       socket.off('products:updated', onAnyChange);
       socket.off('products:deleted', onAnyChange);
-      socket.off('demands:created', onAnyChange);
     };
   }, []);
 
@@ -106,18 +104,6 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
     }
   };
 
-  const raiseDemand = async (p: Product) => {
-    try {
-      const ok = await createDemand(p.id, 1);
-      if (ok) {
-        alert('Demand sent. We will contact you.');
-      } else {
-        alert('Failed to send demand.');
-      }
-    } catch {
-      alert('Failed to send demand.');
-    }
-  };
 
   const removeFromCart = (id: string) => {
     persistCart(cartItems.filter(ci => ci.id !== id));
@@ -130,16 +116,48 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
 
   const submitDemandFromCart = async () => {
     if (cartItems.length === 0) {
-      setCartOpen(false);
+      alert('Cart is empty');
       return;
     }
+
     try {
-      await Promise.all(cartItems.map(ci => createDemand(ci.id, ci.quantity)));
-      alert('Demand sent for your cart items. We will contact you.');
-      persistCart([]);
-      setCartOpen(false);
-    } catch (e) {
-      alert('Failed to send demand. Please try again.');
+      // Convert cart items to order items format
+      const items = cartItems.map(ci => {
+        const product = products.find(p => p.id === ci.id);
+        return {
+          productId: ci.id,
+          itemNumber: ci.itemNumber,
+          quantity: ci.quantity,
+          unitPrice: ci.price,
+          totalPrice: ci.price * ci.quantity,
+        };
+      });
+
+      // For client demands, we might need a special vendor or the backend handles it differently
+      // For now, we'll try to create an order - the backend might need vendorId
+      // If this fails, we may need to create a demand-specific endpoint
+      const orderData: any = {
+        orderNumber: `DEMAND-${String(Date.now()).slice(-6)}`,
+        items: items,
+        status: 'pending',
+        notes: 'Client demand from cart',
+      };
+
+      // Note: The backend requires vendorId, but for client demands this might be handled differently
+      // You may need to add a special vendorId for client demands or modify the backend
+      const created = await createOrder(orderData);
+      
+      if (created) {
+        alert('Demand submitted successfully!');
+        persistCart([]);
+        setCartOpen(false);
+        await fetchData();
+      } else {
+        alert('Failed to submit demand. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Failed to submit demand:', error);
+      alert(error?.message || 'Failed to submit demand. Please try again.');
     }
   };
 
@@ -149,13 +167,11 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [allProducts, allOrders, mine] = await Promise.all([
+      const [allProducts, allOrders] = await Promise.all([
         userIsClient ? getVisibleProducts() : getAllProducts(),
         getAllOrders(),
-        userIsClient ? getMyDemands() : Promise.resolve([])
       ]);
       setProducts(allProducts);
-      setMyDemands(mine || []);
 
       const imgMap: Record<string, string> = {};
       (allProducts || []).forEach((p: any) => {
@@ -289,6 +305,30 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
     setShowModal(true);
   };
 
+  const handleSendProductsToExternalApp = async () => {
+    const shouldSend = window.confirm('Send all active products to the configured external application now?');
+    if (!shouldSend) return;
+    setSendingProducts(true);
+    try {
+      const response = await sendProductsToExternalApp();
+      const total = response?.data?.meta?.total ?? 0;
+      const exportedAt = response?.data?.meta?.exportedAt;
+      if (exportedAt) {
+        setLastExternalSync({ total, exportedAt });
+      }
+      const remoteStatus = response?.data?.remoteResponse?.status
+        ? ` (External status: ${response.data.remoteResponse.status})`
+        : '';
+      alert(response?.message || `Products sent successfully.${remoteStatus}`);
+    } catch (error: any) {
+      console.error('Failed to send products externally', error);
+      const message = error?.message || 'Failed to send products to external app.';
+      alert(message);
+    } finally {
+      setSendingProducts(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="flex items-center justify-between mb-6">
@@ -321,6 +361,7 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
               Import Invoice
             </button>
           )}
+       
           {userIsClient && (
             <button
               onClick={() => setCartOpen(true)}
@@ -332,6 +373,11 @@ const ProductsPage: React.FC<ProductsPageProps> = ({ onLogout, forceClient }) =>
             </button>
           )}
         </div>
+        {userIsAdmin && lastExternalSync && (
+          <p className="text-xs text-gray-500 mt-1 text-right">
+            Last external sync: {new Date(lastExternalSync.exportedAt).toLocaleString()} • {lastExternalSync.total} products
+          </p>
+        )}
       </div>
 
       {/* Client demand history moved to ClientDemandsPage */}

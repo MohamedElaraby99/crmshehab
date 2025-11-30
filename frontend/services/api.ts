@@ -1,4 +1,4 @@
-import { User, Order, Product, Vendor, ProductPurchase, Demand } from '../types';
+import { User, Order, Product, Vendor, ProductPurchase } from '../types';
 import { io, Socket } from 'socket.io-client';
 
 // Resolve API base URL
@@ -224,7 +224,7 @@ export const getAllUsers = async (): Promise<User[]> => {
   }
 };
 
-export const createUser = async (payload: { username: string; password: string; role: 'admin' | 'vendor' | 'client'; }): Promise<User | null> => {
+export const createUser = async (payload: { username: string; password: string; role: 'admin' | 'vendor'; }): Promise<User | null> => {
   try {
     const response = await apiRequest('/users', {
       method: 'POST',
@@ -237,7 +237,7 @@ export const createUser = async (payload: { username: string; password: string; 
   }
 };
 
-export const updateUser = async (id: string, updates: Partial<{ username: string; password: string; role: 'admin' | 'vendor' | 'client'; isActive: boolean; }>): Promise<User | null> => {
+export const updateUser = async (id: string, updates: Partial<{ username: string; password: string; role: 'admin' | 'vendor'; isActive: boolean; }>): Promise<User | null> => {
   try {
     const response = await apiRequest(`/users/${id}`, {
       method: 'PUT',
@@ -471,6 +471,24 @@ export const deleteProduct = async (id: string): Promise<boolean> => {
   } catch (error) {
     console.error('Delete product failed:', error);
     return false;
+  }
+};
+
+export const sendProductsToExternalApp = async (options?: {
+  targetUrl?: string;
+  includeHidden?: boolean;
+  dryRun?: boolean;
+  limit?: number;
+}): Promise<any> => {
+  try {
+    const response = await apiRequest('/products/export/send', {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
+    });
+    return response;
+  } catch (error) {
+    console.error('Send products to external app failed:', error);
+    throw error;
   }
 };
 
@@ -732,110 +750,6 @@ export const getProductPurchases = async (productId: string): Promise<ProductPur
   }
 };
 
-export const createDemand = async (productId: string, quantity: number = 1, notes?: string): Promise<boolean> => {
-  try {
-    const response = await apiRequest('/demands', {
-      method: 'POST',
-      body: JSON.stringify({ productId, quantity, notes })
-    });
-    return !!response?.success;
-  } catch (error) {
-    console.error('Create demand failed:', error);
-    return false;
-  }
-};
-
-export const getAllDemands = async (): Promise<Demand[]> => {
-  try {
-    const response = await apiRequest('/demands');
-    return response?.success ? response.data : [];
-  } catch (error) {
-    console.error('Get demands failed:', error);
-    return [];
-  }
-};
-
-export const getMyDemands = async (): Promise<Demand[]> => {
-  try {
-    const response = await apiRequest('/demands/mine');
-    return response?.success ? response.data : [];
-  } catch (error) {
-    console.error('Get my demands failed:', error);
-    return [];
-  }
-};
-
-// WhatsApp Recipients API (admin)
-export interface WhatsAppRecipient { id: string; phone: string; name?: string; createdAt: string }
-
-export const getWhatsAppRecipients = async (): Promise<WhatsAppRecipient[]> => {
-  try {
-    const response = await apiRequest('/whatsapp-recipients');
-    const list = response?.success ? (response.data || []) : [];
-    return list.map((r: any) => ({ ...r, id: r.id || r._id }));
-  } catch (error) {
-    console.error('Get WhatsApp recipients failed:', error);
-    return [];
-  }
-};
-
-export const createWhatsAppRecipient = async (payload: { phone: string; name?: string }): Promise<WhatsAppRecipient | null> => {
-  try {
-    const response = await apiRequest('/whatsapp-recipients', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    return response?.success ? { ...(response.data || {}), id: response.data?.id || response.data?._id } : null;
-  } catch (error) {
-    console.error('Create WhatsApp recipient failed:', error);
-    return null;
-  }
-};
-
-export const deleteWhatsAppRecipient = async (id: string): Promise<boolean> => {
-  try {
-    const response = await apiRequest(`/whatsapp-recipients/${id}`, {
-      method: 'DELETE'
-    });
-    return !!response?.success;
-  } catch (error) {
-    console.error('Delete WhatsApp recipient failed:', error);
-    return false;
-  }
-};
-export const updateDemandStatus = async (id: string, status: 'pending' | 'confirmed' | 'rejected'): Promise<Demand | null> => {
-  try {
-    const response = await apiRequest(`/demands/${id}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status })
-    });
-    return response?.success ? response.data : null;
-  } catch (error) {
-    console.error('Update demand status failed:', error);
-    return null;
-  }
-};
-
-// Send WhatsApp demand report (server will compose and send via Cloud API)
-export const sendDemandReportToWhatsApp = async (
-  demandId: string,
-  recipientPhone: string,
-  bundleWindowSec?: number
-): Promise<{ success: boolean; reportUrl?: string; message?: string }> => {
-  try {
-    const response = await apiRequest(`/demands/${encodeURIComponent(demandId)}/send-report`, {
-      method: 'POST',
-      body: JSON.stringify({ recipientPhone, bundleWindowSec }),
-    });
-    if (response?.success) {
-      return { success: true, reportUrl: response.data?.reportUrl };
-    }
-    return { success: false, message: response?.message || 'Failed to send report' };
-  } catch (error: any) {
-    console.error('Send WhatsApp report failed:', error);
-    return { success: false, message: error?.message || 'Network error' };
-  }
-};
 
 export const getAllProductPurchases = async (): Promise<ProductPurchase[]> => {
   try {
@@ -896,24 +810,6 @@ export const getProductPurchaseStats = async (productId: string) => {
   }
 };
 
-// Confirmed demands per product (admin)
-export const getConfirmedDemandsByProduct = async (productId: string): Promise<Array<{ id: string; user: string; quantity: number; notes?: string; createdAt: string; sellingPrice?: number }>> => {
-  try {
-    const response = await apiRequest(`/demands/product/${productId}/confirmed`);
-    const list = response?.success ? (response.data || []) : [];
-    return list.map((d: any) => ({
-      id: d.id || d._id,
-      user: (d.userId && d.userId.username) ? d.userId.username : String(d.userId),
-      quantity: d.quantity || 0,
-      notes: d.notes || '',
-      createdAt: d.createdAt,
-      sellingPrice: (d.productId && typeof d.productId.sellingPrice === 'number') ? d.productId.sellingPrice : undefined
-    }));
-  } catch (error) {
-    console.error('Get confirmed demands by product failed:', error);
-    return [];
-  }
-};
 
 // Logout function
 export const logout = (): void => {

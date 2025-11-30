@@ -15,8 +15,6 @@ const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const productPurchaseRoutes = require('./routes/productPurchases');
 const fieldConfigRoutes = require('./routes/fieldConfigs');
-const demandRoutes = require('./routes/demands');
-const whatsappRecipientRoutes = require('./routes/whatsappRecipients');
 
 const app = express();
 // Create server with Express app (standard Socket.IO integration)
@@ -38,7 +36,8 @@ const corsOptions = {
       process.env.FRONTEND_URL || 'http://localhost:5173',
       'https://crm.fikra.solutions',
       'http://localhost:3000',
-      'http://localhost:5173'
+      'http://localhost:5173',
+      'http://localhost:5175'
     ];
     
     if (allowedOrigins.includes(origin)) {
@@ -151,8 +150,6 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/product-purchases', productPurchaseRoutes);
 app.use('/api/field-configs', fieldConfigRoutes);
-app.use('/api/demands', demandRoutes);
-app.use('/api/whatsapp-recipients', whatsappRecipientRoutes);
 
 // Static files for uploads (folder name: 'upload')
 const uploadDir = path.join(__dirname, 'upload');

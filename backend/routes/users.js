@@ -43,11 +43,11 @@ router.post('/', [
       });
     }
 
-    // Force new users to be created as 'client' only
+    // Create user with vendor role by default
     const user = new User({
       username,
       password,
-      role: 'client',
+      role: 'vendor',
     });
 
     await user.save();
@@ -71,7 +71,7 @@ router.put('/:id', [
   authenticateUser,
   requireAdmin,
   body('username').optional().trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
-  body('role').optional().isIn(['admin', 'vendor', 'client']).withMessage('Invalid role'),
+  body('role').optional().isIn(['admin', 'vendor']).withMessage('Invalid role'),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

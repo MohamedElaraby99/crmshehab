@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 interface NavigationProps {
   onLogout: () => void;
-  userRole?: 'admin' | 'vendor' | 'client';
+  userRole?: 'admin' | 'vendor';
 }
 
 const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
@@ -23,9 +23,6 @@ const Navigation: React.FC<NavigationProps> = ({ onLogout, userRole }) => {
     { path: '/orders', label: 'Orders'},
     { path: '/vendors', label: 'Vendors'},
     { path: '/products', label: 'Products'},
-    { path: '/demands', label: 'Demands'},
-    { path: '/whatsapp', label: 'WhatsApp Recipients'},
-    { path: '/whatsapp-web', label: 'WhatsApp Web'},
     { path: '/users', label: 'Users'},
   ];
 

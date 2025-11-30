@@ -11,7 +11,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ onLogout }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'admin' | 'vendor' | 'client'>('client');
+  const [role, setRole] = useState<'admin' | 'vendor'>('vendor');
   const [error, setError] = useState<string>('');
   const [editUsername, setEditUsername] = useState<Record<string, string>>({});
   const [editPassword, setEditPassword] = useState<Record<string, string>>({});
@@ -45,14 +45,14 @@ const UsersPage: React.FC<UsersPageProps> = ({ onLogout }) => {
     if (newUser) {
       setUsername('');
       setPassword('');
-      setRole('client');
+      setRole('vendor');
       await fetchUsers();
     } else {
       setError('Failed to create user');
     }
   };
 
-  const handleRoleChange = async (id: string, newRole: 'admin' | 'vendor' | 'client') => {
+  const handleRoleChange = async (id: string, newRole: 'admin' | 'vendor') => {
     const updated = await updateUser(id, { role: newRole });
     if (updated) fetchUsers();
   };
@@ -202,7 +202,7 @@ const UsersPage: React.FC<UsersPageProps> = ({ onLogout }) => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <select
                         className="border rounded px-2 py-1"
-                        value={(u as any).role || 'client'}
+                        value={(u as any).role || 'vendor'}
                         onChange={(e) => handleRoleChange(u.id, e.target.value as any)}
                       >
                         <option value="client">Client</option>

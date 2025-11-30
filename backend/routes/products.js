@@ -103,12 +103,7 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
 
     const query = { isActive: true };
 
-    // Hide products from clients if not visibleToClients
-    // Admins and vendors can see all products
-    if (req.userType === 'client' || (req.user && req.user.role === 'client')) {
-      query.visibleToClients = true;
-    }
-    // Note: Vendors (req.vendor exists) can see all products without the visibleToClients filter
+    // Note: Vendors and admins can see all products without the visibleToClients filter
 
     if (search) {
       query.$or = [
@@ -166,7 +161,7 @@ router.get('/', authenticateUserOrVendor, async (req, res) => {
   }
 });
 
-// Public/Client-visible products (separate endpoint)
+// Visible products endpoint (separate endpoint)
 router.get('/visible/list', authenticateUserOrVendor, async (req, res) => {
   try {
     const {
@@ -179,12 +174,7 @@ router.get('/visible/list', authenticateUserOrVendor, async (req, res) => {
 
     let query = { isActive: true };
 
-    // For clients, only show products visible to clients
-    // Admins and vendors can see all products (since they need to create orders)
-    if (req.userType === 'client' || (req.user && req.user.role === 'client')) {
-      query.visibleToClients = true;
-    }
-    // Note: Vendors (req.vendor) can see all products without the visibleToClients filter
+    // Note: Vendors and admins can see all products without the visibleToClients filter
 
     if (search) {
       query.$or = [
@@ -302,6 +292,235 @@ router.get('/visible', authenticateUser, async (req, res) => {
   } catch (error) {
     console.error('Get visible products (alias) error:', error);
     res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Admin-triggered export to external application
+router.post('/export/send', authenticateUser, requireAdmin, async (req, res) => {
+  try {
+    const {
+      targetUrl,
+      includeHidden = true,
+      dryRun = false,
+      limit,
+    } = req.body || {};
+
+    const destinationUrl = targetUrl || process.env.EXTERNAL_PRODUCTS_WEBHOOK_URL;
+    if (!destinationUrl && !dryRun) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provide `targetUrl` in the request body or configure EXTERNAL_PRODUCTS_WEBHOOK_URL.',
+      });
+    }
+
+    const numericLimit = Math.min(
+      Math.max(parseInt(limit, 10) || 0, 0),
+      5000
+    );
+
+    const query = { isActive: true };
+    if (!includeHidden) {
+      query.visibleToClients = true;
+    }
+
+    let productQuery = Product.find(query).sort({ updatedAt: -1 });
+    if (numericLimit > 0) {
+      productQuery = productQuery.limit(numericLimit);
+    }
+
+    const docs = await productQuery.lean();
+    const normalized = docs.map(normalizeProduct);
+    const payload = {
+      meta: {
+        exportedAt: new Date().toISOString(),
+        total: normalized.length,
+        includeHidden: !!includeHidden,
+        limited: numericLimit > 0 && normalized.length >= numericLimit,
+      },
+      products: normalized,
+    };
+
+    let remoteResponse = null;
+    if (!dryRun) {
+      const fetch = await getFetch();
+      const controller = new AbortController();
+      const timeoutMs = Number(process.env.EXTERNAL_PRODUCTS_WEBHOOK_TIMEOUT_MS || 10000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      try {
+        const resp = await fetch(destinationUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'crm-products-export/1.0',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const text = await resp.text();
+        let parsedBody = null;
+        try {
+          parsedBody = JSON.parse(text);
+        } catch {
+          parsedBody = text;
+        }
+        remoteResponse = {
+          status: resp.status,
+          ok: resp.ok,
+          body: parsedBody,
+        };
+        if (!resp.ok) {
+          return res.status(502).json({
+            success: false,
+            message: `External app responded with status ${resp.status}`,
+            data: { remoteResponse, destinationUrl },
+          });
+        }
+      } catch (error) {
+        const isAbort = error?.name === 'AbortError';
+        console.error('Failed to reach external app webhook:', error);
+        return res.status(502).json({
+          success: false,
+          message: isAbort ? 'Timed out while contacting external app' : 'Failed to contact external app',
+          data: { destinationUrl },
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: dryRun ? 'Dry run complete. No payload was sent.' : 'Products sent to external app successfully.',
+      data: {
+        meta: payload.meta,
+        remoteResponse,
+        destinationUrl: dryRun ? null : destinationUrl,
+        preview: normalized.slice(0, 5),
+      },
+    });
+  } catch (error) {
+    console.error('Export products to external app error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// API key protected export for external consumers
+router.get('/export/share', async (req, res) => {
+  try {
+    const expectedKey = (process.env.EXTERNAL_PRODUCTS_API_KEY || '').trim();
+    if (!expectedKey) {
+      return res.status(503).json({
+        success: false,
+        message: 'External products API key is not configured on the server.',
+      });
+    }
+
+    const providedKey = String(
+      req.headers['x-external-api-key'] ||
+      req.headers['x-api-key'] ||
+      req.query.key ||
+      ''
+    ).trim();
+
+    if (!providedKey || providedKey !== expectedKey) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid external API key.',
+      });
+    }
+
+    const includeHidden = String(req.query.includeHidden || 'false').toLowerCase() === 'true';
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 1000, 1),
+      5000
+    );
+
+    const query = { isActive: true };
+    if (!includeHidden) {
+      query.visibleToClients = true;
+    }
+
+    const docs = await Product.find(query)
+      .sort({ updatedAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const normalized = docs.map(normalizeProduct);
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      data: {
+        products: normalized,
+        meta: {
+          exportedAt: new Date().toISOString(),
+          total: normalized.length,
+          includeHidden,
+          limit,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('External share endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+});
+
+// Public endpoint for external applications (no authentication required)
+router.get('/public', async (req, res) => {
+  try {
+    const includeHidden = String(req.query.includeHidden || 'false').toLowerCase() === 'true';
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 1000, 1),
+      5000
+    );
+
+    const query = { isActive: true };
+    if (!includeHidden) {
+      query.visibleToClients = true;
+    }
+
+    // Fetch all product fields including stock
+    const docs = await Product.find(query)
+      .sort({ updatedAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Normalize products and compute stock if needed
+    const normalized = await Promise.all(docs.map(async (p) => {
+      const obj = normalizeProduct(p);
+      // Ensure stock is always present - compute from confirmed orders if not set
+      if (obj.stock === undefined || obj.stock === null || isNaN(obj.stock)) {
+        obj.stock = await computeStockFromConfirmed(obj.id);
+      }
+      // Ensure stock is a number
+      obj.stock = typeof obj.stock === 'number' ? obj.stock : 0;
+      return obj;
+    }));
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      data: {
+        products: normalized,
+        meta: {
+          exportedAt: new Date().toISOString(),
+          total: normalized.length,
+          includeHidden,
+          limit,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Public products endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
   }
 });
 
@@ -453,13 +672,24 @@ router.post('/', [
 
     const { itemNumber, name, description, specifications, sellingPrice, stock, reorderLevel, visibleToClients } = req.body;
 
+    // Always provide a description: Use provided description, or generate from name + itemNumber, or just name
+    let finalDescription = description;
+    if (!finalDescription || finalDescription.trim() === '') {
+      if (name !== itemNumber) {
+        finalDescription = `${name} (${itemNumber})`;
+      } else {
+        finalDescription = name;
+      }
+    }
+
     // Check if item number already exists
     const existingProduct = await Product.findOne({ itemNumber });
     if (existingProduct) {
       // If an inactive product with same itemNumber exists, reactivate/update it instead of erroring
       if (existingProduct.isActive === false) {
         existingProduct.name = name;
-        if (typeof description !== 'undefined') existingProduct.description = description;
+        // Always ensure description is set
+        existingProduct.description = finalDescription;
         if (typeof specifications !== 'undefined') existingProduct.specifications = specifications || {};
         if (typeof sellingPrice !== 'undefined') existingProduct.sellingPrice = sellingPrice;
         if (typeof stock !== 'undefined') existingProduct.stock = stock;
@@ -482,7 +712,7 @@ router.post('/', [
     const product = new Product({
       itemNumber,
       name,
-      description,
+      description: finalDescription,
       specifications: specifications || {},
       ...(typeof sellingPrice !== 'undefined' ? { sellingPrice } : {}),
       ...(typeof stock !== 'undefined' ? { stock } : {}),
@@ -551,9 +781,26 @@ router.put('/:id', [
       }
     }
 
+    // Prepare update data
+    const updateData = { ...req.body };
+    
+    // If description is provided and empty, generate one from name and itemNumber
+    if ('description' in req.body) {
+      const providedDescription = String(req.body.description || '').trim();
+      if (providedDescription === '') {
+        const productName = req.body.name || product.name;
+        const productItemNumber = req.body.itemNumber || product.itemNumber;
+        if (productName !== productItemNumber) {
+          updateData.description = `${productName} (${productItemNumber})`;
+        } else {
+          updateData.description = productName;
+        }
+      }
+    }
+
     const updatedProduct = await Product.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     );
 
@@ -803,24 +1050,68 @@ router.post('/import/excel', [authenticateUser, requireAdmin, excelUpload.single
       try {
         const itemNumber = String(get(row, ['OEM', 'Item', 'Item Number', 'Part Number', '编号', 'itemNumber']) || '').trim();
         const name = String(get(row, ['Name', 'Product', 'Description', '名称', 'name']) || '').trim() || itemNumber;
+        const description = String(get(row, ['Description', 'Desc', '描述', 'description']) || '').trim();
         const quantity = Number(get(row, ['Quantity', 'Qty', '数量', 'stock'])) || 0;
 
-        if (!itemNumber) { results.skipped++; continue; }
+        // Enhanced validation: Check required fields before processing
+        if (!itemNumber) {
+          results.skipped++;
+          results.errors.push({ row, message: 'Missing required field: itemNumber', error: 'Item number is required' });
+          continue;
+        }
+
+        if (!name || name.trim() === '') {
+          results.skipped++;
+          results.errors.push({ row, message: 'Missing required field: name', error: 'Product name is required' });
+          continue;
+        }
+
+        // Always provide a description: Use provided description, or generate from name + itemNumber, or just name
+        let finalDescription = description;
+        if (!finalDescription || finalDescription.trim() === '') {
+          if (name !== itemNumber) {
+            finalDescription = `${name} (${itemNumber})`;
+          } else {
+            finalDescription = name;
+          }
+        }
 
         let product = await Product.findOne({ itemNumber });
         if (!product) {
-          product = new Product({ itemNumber, name, description: '', stock: quantity });
+          // Validate all required fields before creating
+          const productData = {
+            itemNumber,
+            name,
+            description: finalDescription,
+            stock: quantity
+          };
+          
+          // Create product with validation
+          product = new Product(productData);
           await product.save();
           results.created++;
         } else {
+          // Update existing product
           product.name = name || product.name;
+          // Update description if it was empty or if new description is provided
+          if (!product.description || product.description.trim() === '' || description) {
+            product.description = finalDescription;
+          }
           if (Number.isFinite(quantity)) product.stock = quantity;
           if (product.isActive === false) product.isActive = true;
           await product.save();
           results.updated++;
         }
       } catch (e) {
-        results.errors.push({ row, message: 'Row processing failed', error: String(e.message || e) });
+        // Better error handling: Capture validation errors and database errors
+        const errorMessage = e.message || String(e);
+        const errorDetails = e.errors ? Object.keys(e.errors).map(key => `${key}: ${e.errors[key].message}`).join(', ') : '';
+        results.errors.push({ 
+          row, 
+          message: 'Row processing failed', 
+          error: errorMessage,
+          details: errorDetails || undefined
+        });
       }
     }
 
